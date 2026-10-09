@@ -1,0 +1,1 @@
+# ecr module — outputs.tf
