@@ -1,0 +1,1 @@
+# observability module — variables.tf

@@ -1,0 +1,1 @@
+# dns module — outputs.tf
