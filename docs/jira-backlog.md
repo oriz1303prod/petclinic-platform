@@ -213,7 +213,7 @@ Create the Terraform directory structure in petclinic-platform with separate env
 **Acceptance Criteria:**
 - [ ] `terraform/environments/dev/` directory exists with main.tf, variables.tf, outputs.tf, backend.tf, terraform.tfvars
 - [ ] `terraform/environments/prod/` directory exists with same files
-- [ ] `terraform/modules/` directory exists with subdirectories: vpc, eks, ecr, rds, dns, secrets, observability
+- [ ] `terraform/modules/` directory exists with subdirectories: vpc, eks, ecr, rds, dns, secrets, observability, karpenter
 - [ ] Each module dir has placeholder main.tf, variables.tf, outputs.tf
 - [ ] .gitignore includes .terraform/, *.tfstate, *.tfstate.backup, *.tfvars (sensitive), plan.out, .env, *.pem, *.key, IDE files, OS files
 - [ ] .terraform.lock.hcl is NOT in .gitignore (must be committed for reproducible builds)
