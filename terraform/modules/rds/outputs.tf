@@ -1,0 +1,1 @@
+# rds module — outputs.tf
