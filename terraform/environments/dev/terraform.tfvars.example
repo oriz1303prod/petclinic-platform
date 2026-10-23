@@ -1,0 +1,11 @@
+aws_region  = "us-east-1"
+environment = "dev"
+project     = "petclinic"
+
+# EKS public API endpoint allow-list (your public IP as /32)
+api_allowed_cidrs = ["203.0.113.10/32"]
+
+# DNS zone. With a Cloudflare domain use a delegated subdomain you do not use for anything else.
+domain_name = "lab.orizdevops.cc"
+# Set to true only after the Ingress has created the ALB (PETPLAT-31)
+create_alb_record = false

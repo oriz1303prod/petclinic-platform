@@ -3,7 +3,8 @@
 > **Purpose:** Single source of truth for all infrastructure values. Jira stories reference sections of this document via anchor links. Read the relevant section before implementing any story.
 >
 > **Convention:** Dev environment is built during the course. Prod values are defined here but implementation is a **student assignment** unless noted otherwise.
-
+> 
+> **Update**:** Whenever complete the ticket changes the status to "Done"
 ---
 
 ## Table of Contents
@@ -38,8 +39,8 @@
 
 | Parameter | Value |
 |-----------|-------|
-| AWS Region | `eu-central-1` |
-| Availability Zones | `eu-central-1a`, `eu-central-1b` |
+| AWS Region | `us-east-1` |
+| Availability Zones | `us-east-1a`, `us-east-1b` |
 | Project Name | `petclinic` |
 | Naming Convention | `petclinic-{env}-{resource}` (e.g., `petclinic-dev-vpc`, `petclinic-prod-eks`) |
 | Environments | `dev`, `prod` |
@@ -91,7 +92,7 @@ These tags are applied via `default_tags` in the AWS provider configuration. Mod
 
 `scripts/bootstrap-state.sh` provisions the S3 bucket and DynamoDB table. It is:
 - Idempotent (safe to run multiple times)
-- Accepts `--region` parameter (default: `eu-central-1`)
+- Accepts `--region` parameter (default: `us-east-1`)
 - Run once before `terraform init`
 
 ---
@@ -187,7 +188,7 @@ Four security groups per environment. Security groups are the **primary access c
 | Parameter | Dev | Prod |
 |-----------|-----|------|
 | Cluster Name | `petclinic-dev` | `petclinic-prod` |
-| Kubernetes Version | `1.29` | `1.29` |
+| Kubernetes Version | `1.35` | `1.35` |
 | API Server Endpoint | Public | Public |
 | Authentication Mode | `API_AND_CONFIG_MAP` | `API_AND_CONFIG_MAP` |
 | Cluster Logging | `api`, `audit`, `authenticator` | `api`, `audit`, `authenticator` |
@@ -202,6 +203,7 @@ Four security groups per environment. Security groups are the **primary access c
 ### OIDC Provider
 
 Created from EKS cluster identity issuer URL. Required for IRSA (IAM Roles for Service Accounts).
+The provider's TLS thumbprint is read from the issuer's certificate chain with the `hashicorp/tls` provider (`tls_certificate` data source). AWS ignores it for EKS issuers.
 
 ### Managed Node Group
 
@@ -215,7 +217,7 @@ Created from EKS cluster identity issuer URL. Required for IRSA (IAM Roles for S
 | Max Size | 4 | 4 |
 | Desired Size | 2 | 2 |
 | Disk Size | 20 GB | 20 GB |
-| AMI Type | `AL2_ARM_64` | `AL2_ARM_64` |
+| AMI Type | `AL2023_ARM_64_STANDARD` | `AL2023_ARM_64_STANDARD` |
 
 > **Cost note:** t4g.small instances (2 vCPU, 2 GiB) are eligible for the AWS Graviton free trial (750 hrs/month until Dec 2026). Both dev and prod use identical sizing — this is a cost optimization for a learning project. In production, you would use larger instances (e.g., m7g.xlarge). Students should understand this trade-off.
 
@@ -248,7 +250,7 @@ Add-on versions pinned (not `latest`). Resolve conflicts strategy: `OVERWRITE` f
 |-----------|-----|------|
 | Registry Type | ECR Private | ECR Private |
 | Terraform Resource | `aws_ecr_repository` | `aws_ecr_repository` |
-| Region | `eu-central-1` (same as infra) | `eu-central-1` |
+| Region | `us-east-1` (same as infra) | `us-east-1` |
 | Tag Mutability | `MUTABLE` | `IMMUTABLE` |
 | Image Scanning | Scan-on-push enabled | Scan-on-push enabled |
 | Encryption | AES256 (default) | AES256 (default) |
@@ -257,23 +259,23 @@ Add-on versions pinned (not `latest`). Resolve conflicts strategy: `OVERWRITE` f
 
 | Repository Name | Service | Image URI Pattern |
 |-----------------|---------|-------------------|
-| `petclinic-{env}/config-server` | Config Server | `{account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic-{env}/config-server:{tag}` |
-| `petclinic-{env}/discovery-server` | Discovery Server | `{account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic-{env}/discovery-server:{tag}` |
-| `petclinic-{env}/api-gateway` | API Gateway | `{account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic-{env}/api-gateway:{tag}` |
-| `petclinic-{env}/customers-service` | Customers Service | `{account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic-{env}/customers-service:{tag}` |
-| `petclinic-{env}/visits-service` | Visits Service | `{account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic-{env}/visits-service:{tag}` |
-| `petclinic-{env}/vets-service` | Vets Service | `{account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic-{env}/vets-service:{tag}` |
-| `petclinic-{env}/genai-service` | GenAI Service | `{account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic-{env}/genai-service:{tag}` |
-| `petclinic-{env}/admin-server` | Admin Server | `{account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic-{env}/admin-server:{tag}` |
+| `petclinic-{env}/config-server` | Config Server | `{account}.dkr.ecr.us-east-1.amazonaws.com/petclinic-{env}/config-server:{tag}` |
+| `petclinic-{env}/discovery-server` | Discovery Server | `{account}.dkr.ecr.us-east-1.amazonaws.com/petclinic-{env}/discovery-server:{tag}` |
+| `petclinic-{env}/api-gateway` | API Gateway | `{account}.dkr.ecr.us-east-1.amazonaws.com/petclinic-{env}/api-gateway:{tag}` |
+| `petclinic-{env}/customers-service` | Customers Service | `{account}.dkr.ecr.us-east-1.amazonaws.com/petclinic-{env}/customers-service:{tag}` |
+| `petclinic-{env}/visits-service` | Visits Service | `{account}.dkr.ecr.us-east-1.amazonaws.com/petclinic-{env}/visits-service:{tag}` |
+| `petclinic-{env}/vets-service` | Vets Service | `{account}.dkr.ecr.us-east-1.amazonaws.com/petclinic-{env}/vets-service:{tag}` |
+| `petclinic-{env}/genai-service` | GenAI Service | `{account}.dkr.ecr.us-east-1.amazonaws.com/petclinic-{env}/genai-service:{tag}` |
+| `petclinic-{env}/admin-server` | Admin Server | `{account}.dkr.ecr.us-east-1.amazonaws.com/petclinic-{env}/admin-server:{tag}` |
 
 ### ECR Authentication
 
 ```bash
 # Login (same region as infra)
-aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin {account}.dkr.ecr.eu-central-1.amazonaws.com
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin {account}.dkr.ecr.us-east-1.amazonaws.com
 
 # Push
-docker push {account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic-{env}/{service}:{tag}
+docker push {account}.dkr.ecr.us-east-1.amazonaws.com/petclinic-{env}/{service}:{tag}
 ```
 
 ### Image Tag Strategy
@@ -291,9 +293,21 @@ docker push {account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic-{env}/{servic
   "rules": [
     {
       "rulePriority": 1,
-      "description": "Keep last 10 images",
+      "description": "Expire untagged images after 7 days",
       "selection": {
-        "tagStatus": "any",
+        "tagStatus": "untagged",
+        "countType": "sinceImagePushed",
+        "countUnit": "days",
+        "countNumber": 7
+      },
+      "action": { "type": "expire" }
+    },
+    {
+      "rulePriority": 2,
+      "description": "Keep last 10 tagged images",
+      "selection": {
+        "tagStatus": "tagged",
+        "tagPatternList": ["*"],
         "countType": "imageCountMoreThan",
         "countNumber": 10
       },
@@ -302,6 +316,8 @@ docker push {account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic-{env}/{servic
   ]
 }
 ```
+
+Implemented in `terraform/modules/ecr/main.tf` (`max_image_count`, `untagged_expiry_days` variables).
 
 ### Cost
 
@@ -322,8 +338,8 @@ ECR Private: 500 MB free tier, then $0.10/GB/month. With 8 services at ~200 MB e
 | Max Allocated Storage (autoscaling) | 20 GB | 20 GB |
 | Storage Type | `gp2` | `gp2` |
 | Storage Encrypted | `true` (AWS default KMS key) | `true` (AWS default KMS key) |
-| Backup Retention | 7 days | 7 days |
-| Skip Final Snapshot | `true` | `true` |
+| Backup Retention | 7 days | 30 days |
+| Skip Final Snapshot | `true` | `false` |
 | Deletion Protection | `false` | `false` |
 
 > **Cost note:** db.t4g.micro (2 vCPU, 1 GiB) is AWS RDS free tier eligible (750 hrs/month for 12 months, 20 GB gp2 storage). Both dev and prod use identical sizing — this is a cost optimization for a learning project. In production, you would use db.r7g.large or higher with Multi-AZ, gp3 storage, 30-day backups, deletion protection, and a final snapshot. Students should understand these implications.
@@ -382,7 +398,7 @@ All three database services use a shared `petclinic` database. Each service's sc
 jdbc:mysql://{rds-endpoint}:3306/petclinic
 ```
 
-Example: `jdbc:mysql://petclinic-dev-mysql.abc123.eu-central-1.rds.amazonaws.com:3306/petclinic`
+Example: `jdbc:mysql://petclinic-dev-mysql.abc123.us-east-1.rds.amazonaws.com:3306/petclinic`
 
 ---
 
@@ -424,7 +440,7 @@ spec:
   provider:
     aws:
       service: SecretsManager
-      region: eu-central-1
+      region: us-east-1
       auth:
         jwt:
           serviceAccountRef:
@@ -466,15 +482,15 @@ spec:
 
 | Parameter | Value |
 |-----------|-------|
-| Domain | `*.{domain}` (wildcard) |
+| Domain | `*.{domain}` (wildcard); `{domain}` is the hosted zone name |
 | Validation Method | DNS (Route 53) |
-| Region | `eu-central-1` (same as ALB) |
+| Region | `us-east-1` (same as ALB) |
 
 ### Route 53
 
 | Parameter | Value |
 |-----------|-------|
-| Hosted Zone | `{domain}` (provided as variable) |
+| Hosted Zone | `{domain}` (provided as variable). With a Cloudflare-registered domain, `{domain}` is a delegated subdomain (e.g. `lab.example.com`); see [dns-cloudflare-delegation.md](dns-cloudflare-delegation.md) |
 | Dev Record | `petclinic-dev.{domain}` → ALB (A record, alias) |
 | Prod Record | `petclinic.{domain}` → ALB (A record, alias) |
 
@@ -482,7 +498,7 @@ spec:
 
 | Parameter | Value |
 |-----------|-------|
-| Installation | Helm chart (`aws-load-balancer-controller` from `eks.amazonaws.com/charts`) |
+| Installation | Helm chart `aws-load-balancer-controller` 3.6.1 from `https://aws.github.io/eks-charts` via `scripts/install-lb-controller.sh` |
 | Namespace | `kube-system` |
 | Auth | IRSA (see [IRSA Roles](#irsa-roles)) |
 | IngressClass | `alb` |
@@ -490,7 +506,9 @@ spec:
 ### Ingress Resource Annotations
 
 ```yaml
-kubernetes.io/ingress.class: alb
+spec.ingressClassName: alb   # replaces the deprecated kubernetes.io/ingress.class annotation
+alb.ingress.kubernetes.io/load-balancer-name: petclinic-{env}-alb
+alb.ingress.kubernetes.io/security-groups: "{alb-sg-id}"   # Terraform ALB SG (80/443 only)
 alb.ingress.kubernetes.io/scheme: internet-facing
 alb.ingress.kubernetes.io/target-type: ip
 alb.ingress.kubernetes.io/certificate-arn: "{acm-certificate-arn}"
@@ -787,7 +805,7 @@ GitHub Actions handles **CI only** (build, test, push images). **ArgoCD handles 
 
 | Secret Name | Purpose |
 |-------------|---------|
-| `AWS_REGION` | `eu-central-1` |
+| `AWS_REGION` | `us-east-1` |
 | `AWS_ROLE_ARN` | OIDC role ARN for `aws-actions/configure-aws-credentials` |
 | `AWS_ACCOUNT_ID` | AWS account ID (for ECR registry URL) |
 
@@ -797,7 +815,7 @@ GitHub Actions handles **CI only** (build, test, push images). **ArgoCD handles 
 2. Set up JDK 17
 3. Set up Docker Buildx + QEMU (for ARM64 cross-compilation)
 4. Configure AWS credentials (OIDC)
-5. Login to ECR: `aws ecr get-login-password --region eu-central-1`
+5. Login to ECR: `aws ecr get-login-password --region us-east-1`
 6. Maven build: `./mvnw clean install -P buildDocker -Dcontainer.platform="linux/arm64"`
 7. Trivy scan: fail on CRITICAL CVEs
 8. Tag images with commit SHA (short, 7 chars): `${GITHUB_SHA::7}`
@@ -939,7 +957,7 @@ Five IAM Roles for Service Accounts, each with OIDC trust policy scoped to a spe
 
 | Role Name Pattern | K8s ServiceAccount | Namespace | IAM Policy | Used By |
 |-------------------|--------------------|-----------|------------|---------|
-| `petclinic-{env}-eso-role` | `external-secrets-sa` | `external-secrets` | `secretsmanager:GetSecretValue`, `secretsmanager:DescribeSecret` on `arn:aws:secretsmanager:eu-central-1:{account}:secret:petclinic/*` | ESO |
+| `petclinic-{env}-eso-role` | `external-secrets-sa` | `external-secrets` | `secretsmanager:GetSecretValue`, `secretsmanager:DescribeSecret` on `arn:aws:secretsmanager:us-east-1:{account}:secret:petclinic/*` | ESO |
 | `petclinic-{env}-lb-controller-role` | `aws-load-balancer-controller` | `kube-system` | AWS Load Balancer Controller IAM policy (managed) | ALB Controller |
 | `petclinic-{env}-ebs-csi-role` | `ebs-csi-controller-sa` | `kube-system` | `AmazonEBSCSIDriverPolicy` (AWS managed) | EBS CSI Driver |
 | `petclinic-{env}-argocd-role` | `argocd-server` | `argocd` | Minimal: only needed if ArgoCD accesses AWS resources directly (optional) | ArgoCD |
@@ -1124,12 +1142,12 @@ No NAT Gateway cost ($0 saved vs ~$35-65/mo with NAT).
 |---------------|------|-------------|---------|
 | `project` | string | Project name | `"petclinic"` |
 | `environment` | string | Environment | — |
-| `cluster_version` | string | Kubernetes version | `"1.29"` |
+| `cluster_version` | string | Kubernetes version | `"1.35"` |
 | `subnet_ids` | list(string) | Subnet IDs for cluster | — |
 | `cluster_sg_id` | string | Cluster security group ID | — |
 | `node_sg_id` | string | Node security group ID | — |
 | `node_instance_types` | list(string) | Instance types for nodes | `["t4g.small"]` |
-| `node_ami_type` | string | AMI type for nodes | `"AL2_ARM_64"` |
+| `node_ami_type` | string | AMI type for nodes | `"AL2023_ARM_64_STANDARD"` |
 | `node_min_size` | number | Min node count | `2` |
 | `node_max_size` | number | Max node count | `4` |
 | `node_desired_size` | number | Desired node count | `2` |
@@ -1155,13 +1173,12 @@ Uses `aws_ecr_repository` with lifecycle policies, scan-on-push, and configurabl
 | Input Variable | Type | Description | Default |
 |---------------|------|-------------|---------|
 | `project` | string | Project name | `"petclinic"` |
+| `environment` | string | Environment (dev/prod) | — |
 | `service_names` | list(string) | Service names for repos | — |
+| `image_tag_mutability` | string | Tag mutability (`MUTABLE` dev, `IMMUTABLE` prod) | `"MUTABLE"` |
+| `max_image_count` | number | Tagged images to keep per repo | `10` |
+| `untagged_expiry_days` | number | Days before untagged images expire | `7` |
 | `tags` | map(string) | Additional tags | `{}` |
-
-| Output | Type | Description |
-|--------|------|-------------|
-| `environment` | string | Environment name | — |
-| `image_tag_mutability` | string | Tag mutability | `"MUTABLE"` |
 
 | Output | Type | Description |
 |--------|------|-------------|
@@ -1202,14 +1219,26 @@ Uses `aws_ecr_repository` with lifecycle policies, scan-on-push, and configurabl
 
 | Input Variable | Type | Description | Default |
 |---------------|------|-------------|---------|
-| `domain_name` | string | Domain name for hosted zone | — |
+| `project` | string | Project name | `"petclinic"` |
+| `environment` | string | Environment (dev/prod) | — |
+| `domain_name` | string | Hosted zone name (delegated subdomain when the domain is at Cloudflare) | — |
+| `enable_dns` | bool | Create zone, certificate and records (false = HTTP only) | `true` |
+| `app_hostname` | string | Host label of the app record (`petclinic-dev`) | — |
+| `create_alb_record` | bool | Create the alias record (only after the Ingress created the ALB) | `false` |
+| `oidc_provider_arn` | string | EKS OIDC provider ARN (LB controller IRSA role) | — |
+| `oidc_provider_url` | string | EKS OIDC provider URL without https:// | — |
+| `lb_controller_namespace` | string | Controller namespace | `"kube-system"` |
+| `lb_controller_service_account` | string | Controller ServiceAccount | `"aws-load-balancer-controller"` |
 | `tags` | map(string) | Additional tags | `{}` |
 
 | Output | Type | Description |
 |--------|------|-------------|
 | `zone_id` | string | Route 53 hosted zone ID |
 | `name_servers` | list(string) | NS records for delegation |
-| `certificate_arn` | string | ACM certificate ARN |
+| `certificate_arn` | string | Validated ACM certificate ARN |
+| `app_fqdn` | string | Application hostname |
+| `alb_name` | string | Name the Ingress gives the ALB |
+| `lb_controller_role_arn` | string | IRSA role ARN for the LB controller |
 
 ### Module: `secrets`
 
@@ -1279,7 +1308,7 @@ helm/
 ```yaml
 replicaCount: 1
 image:
-  repository: ""   # Set per-service: {account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic-{env}/{service}
+  repository: ""   # Set per-service: {account}.dkr.ecr.us-east-1.amazonaws.com/petclinic-{env}/{service}
   tag: "latest"    # Overridden by CI/CD
   pullPolicy: IfNotPresent
 
