@@ -140,6 +140,7 @@ Five MCP servers configured at the project level:
 | `awslabs.aws-pricing-mcp-server` | Cost estimation for AWS services (RDS, EKS, EC2, ALB) |
 | `context7` | Up-to-date library documentation (Terraform, Kubernetes, Helm) |
 | `atlassian` | Jira ticket lookup, creation, updates — drives the task-based workflow |
+| `notion` | Documentation for project information | 
 
 ## CI/CD Pipeline Conventions
 
@@ -164,7 +165,9 @@ Five MCP servers configured at the project level:
 
 ## Technical Specification
 
-All infrastructure values (CIDRs, ports, instance sizes, security groups, K8s resources, probe timings, alert thresholds) are in [`docs/technical-spec.md`](docs/technical-spec.md). Every Jira story references the relevant spec section. **Read the spec before implementing any story.**
+All infrastructure values (CIDRs, ports, instance sizes, security groups, K8s resources, probe timings, alert thresholds) are in [`docs/technical-spec.md`](docs/technical-spec.md). Every Jira story references the relevant spec section. If any specify version are not supported for now just find and fill it with compatible version and update that version into the docs. **Read the spec before implementing any story.**
+
+Take notes after every prompt. Please use the Notion MCP to take notes on everything important from this conversation, starting from my first prompt until now with visuals instead of walls of text, so it isn't boring to read.. Include what I asked, the key points I should know, and any other useful info. Save them to the 'Petclinic Microservices' page I already create. Remove any unnecessary or duplicate information only addons if needed. And optimize the content after every prompt or chages don't just show the text make it easy to understand. **Read the spec before implementing any thing.**
 
 ## Jira Backlog
 

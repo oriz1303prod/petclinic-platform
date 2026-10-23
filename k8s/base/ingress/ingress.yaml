@@ -1,0 +1,39 @@
+# Ingress for the API Gateway (PETPLAT-30).
+# Placeholders are filled from Terraform outputs by scripts/apply-ingress.sh:
+#   ${K8S_NAMESPACE} ${ALB_NAME} ${ALB_SG_ID} ${ACM_CERTIFICATE_ARN} ${APP_FQDN}
+# The managed-by label follows the project convention even though this file is applied by that script.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-gateway
+  namespace: ${K8S_NAMESPACE}
+  labels:
+    app.kubernetes.io/name: api-gateway
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: gateway
+  annotations:
+    alb.ingress.kubernetes.io/load-balancer-name: "${ALB_NAME}"
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    # Use the Terraform-managed ALB SG (80/443 only) instead of a controller-created one
+    alb.ingress.kubernetes.io/security-groups: "${ALB_SG_ID}"
+    alb.ingress.kubernetes.io/certificate-arn: "${ACM_CERTIFICATE_ARN}"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+    alb.ingress.kubernetes.io/healthcheck-path: /actuator/health
+    alb.ingress.kubernetes.io/healthcheck-port: "8080"
+spec:
+  ingressClassName: alb
+  rules:
+    - host: ${APP_FQDN}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8080

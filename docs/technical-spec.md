@@ -188,7 +188,7 @@ Four security groups per environment. Security groups are the **primary access c
 | Parameter | Dev | Prod |
 |-----------|-----|------|
 | Cluster Name | `petclinic-dev` | `petclinic-prod` |
-| Kubernetes Version | `1.29` | `1.29` |
+| Kubernetes Version | `1.35` | `1.35` |
 | API Server Endpoint | Public | Public |
 | Authentication Mode | `API_AND_CONFIG_MAP` | `API_AND_CONFIG_MAP` |
 | Cluster Logging | `api`, `audit`, `authenticator` | `api`, `audit`, `authenticator` |
@@ -203,6 +203,7 @@ Four security groups per environment. Security groups are the **primary access c
 ### OIDC Provider
 
 Created from EKS cluster identity issuer URL. Required for IRSA (IAM Roles for Service Accounts).
+The provider's TLS thumbprint is read from the issuer's certificate chain with the `hashicorp/tls` provider (`tls_certificate` data source). AWS ignores it for EKS issuers.
 
 ### Managed Node Group
 
@@ -216,7 +217,7 @@ Created from EKS cluster identity issuer URL. Required for IRSA (IAM Roles for S
 | Max Size | 4 | 4 |
 | Desired Size | 2 | 2 |
 | Disk Size | 20 GB | 20 GB |
-| AMI Type | `AL2_ARM_64` | `AL2_ARM_64` |
+| AMI Type | `AL2023_ARM_64_STANDARD` | `AL2023_ARM_64_STANDARD` |
 
 > **Cost note:** t4g.small instances (2 vCPU, 2 GiB) are eligible for the AWS Graviton free trial (750 hrs/month until Dec 2026). Both dev and prod use identical sizing — this is a cost optimization for a learning project. In production, you would use larger instances (e.g., m7g.xlarge). Students should understand this trade-off.
 
@@ -292,9 +293,21 @@ docker push {account}.dkr.ecr.us-east-1.amazonaws.com/petclinic-{env}/{service}:
   "rules": [
     {
       "rulePriority": 1,
-      "description": "Keep last 10 images",
+      "description": "Expire untagged images after 7 days",
       "selection": {
-        "tagStatus": "any",
+        "tagStatus": "untagged",
+        "countType": "sinceImagePushed",
+        "countUnit": "days",
+        "countNumber": 7
+      },
+      "action": { "type": "expire" }
+    },
+    {
+      "rulePriority": 2,
+      "description": "Keep last 10 tagged images",
+      "selection": {
+        "tagStatus": "tagged",
+        "tagPatternList": ["*"],
         "countType": "imageCountMoreThan",
         "countNumber": 10
       },
@@ -303,6 +316,8 @@ docker push {account}.dkr.ecr.us-east-1.amazonaws.com/petclinic-{env}/{service}:
   ]
 }
 ```
+
+Implemented in `terraform/modules/ecr/main.tf` (`max_image_count`, `untagged_expiry_days` variables).
 
 ### Cost
 
@@ -323,8 +338,8 @@ ECR Private: 500 MB free tier, then $0.10/GB/month. With 8 services at ~200 MB e
 | Max Allocated Storage (autoscaling) | 20 GB | 20 GB |
 | Storage Type | `gp2` | `gp2` |
 | Storage Encrypted | `true` (AWS default KMS key) | `true` (AWS default KMS key) |
-| Backup Retention | 7 days | 7 days |
-| Skip Final Snapshot | `true` | `true` |
+| Backup Retention | 7 days | 30 days |
+| Skip Final Snapshot | `true` | `false` |
 | Deletion Protection | `false` | `false` |
 
 > **Cost note:** db.t4g.micro (2 vCPU, 1 GiB) is AWS RDS free tier eligible (750 hrs/month for 12 months, 20 GB gp2 storage). Both dev and prod use identical sizing — this is a cost optimization for a learning project. In production, you would use db.r7g.large or higher with Multi-AZ, gp3 storage, 30-day backups, deletion protection, and a final snapshot. Students should understand these implications.
@@ -467,7 +482,7 @@ spec:
 
 | Parameter | Value |
 |-----------|-------|
-| Domain | `*.{domain}` (wildcard) |
+| Domain | `*.{domain}` (wildcard); `{domain}` is the hosted zone name |
 | Validation Method | DNS (Route 53) |
 | Region | `us-east-1` (same as ALB) |
 
@@ -475,7 +490,7 @@ spec:
 
 | Parameter | Value |
 |-----------|-------|
-| Hosted Zone | `{domain}` (provided as variable) |
+| Hosted Zone | `{domain}` (provided as variable). With a Cloudflare-registered domain, `{domain}` is a delegated subdomain (e.g. `lab.example.com`); see [dns-cloudflare-delegation.md](dns-cloudflare-delegation.md) |
 | Dev Record | `petclinic-dev.{domain}` → ALB (A record, alias) |
 | Prod Record | `petclinic.{domain}` → ALB (A record, alias) |
 
@@ -483,7 +498,7 @@ spec:
 
 | Parameter | Value |
 |-----------|-------|
-| Installation | Helm chart (`aws-load-balancer-controller` from `eks.amazonaws.com/charts`) |
+| Installation | Helm chart `aws-load-balancer-controller` 3.6.1 from `https://aws.github.io/eks-charts` via `scripts/install-lb-controller.sh` |
 | Namespace | `kube-system` |
 | Auth | IRSA (see [IRSA Roles](#irsa-roles)) |
 | IngressClass | `alb` |
@@ -491,7 +506,9 @@ spec:
 ### Ingress Resource Annotations
 
 ```yaml
-kubernetes.io/ingress.class: alb
+spec.ingressClassName: alb   # replaces the deprecated kubernetes.io/ingress.class annotation
+alb.ingress.kubernetes.io/load-balancer-name: petclinic-{env}-alb
+alb.ingress.kubernetes.io/security-groups: "{alb-sg-id}"   # Terraform ALB SG (80/443 only)
 alb.ingress.kubernetes.io/scheme: internet-facing
 alb.ingress.kubernetes.io/target-type: ip
 alb.ingress.kubernetes.io/certificate-arn: "{acm-certificate-arn}"
@@ -1125,12 +1142,12 @@ No NAT Gateway cost ($0 saved vs ~$35-65/mo with NAT).
 |---------------|------|-------------|---------|
 | `project` | string | Project name | `"petclinic"` |
 | `environment` | string | Environment | — |
-| `cluster_version` | string | Kubernetes version | `"1.29"` |
+| `cluster_version` | string | Kubernetes version | `"1.35"` |
 | `subnet_ids` | list(string) | Subnet IDs for cluster | — |
 | `cluster_sg_id` | string | Cluster security group ID | — |
 | `node_sg_id` | string | Node security group ID | — |
 | `node_instance_types` | list(string) | Instance types for nodes | `["t4g.small"]` |
-| `node_ami_type` | string | AMI type for nodes | `"AL2_ARM_64"` |
+| `node_ami_type` | string | AMI type for nodes | `"AL2023_ARM_64_STANDARD"` |
 | `node_min_size` | number | Min node count | `2` |
 | `node_max_size` | number | Max node count | `4` |
 | `node_desired_size` | number | Desired node count | `2` |
@@ -1156,13 +1173,12 @@ Uses `aws_ecr_repository` with lifecycle policies, scan-on-push, and configurabl
 | Input Variable | Type | Description | Default |
 |---------------|------|-------------|---------|
 | `project` | string | Project name | `"petclinic"` |
+| `environment` | string | Environment (dev/prod) | — |
 | `service_names` | list(string) | Service names for repos | — |
+| `image_tag_mutability` | string | Tag mutability (`MUTABLE` dev, `IMMUTABLE` prod) | `"MUTABLE"` |
+| `max_image_count` | number | Tagged images to keep per repo | `10` |
+| `untagged_expiry_days` | number | Days before untagged images expire | `7` |
 | `tags` | map(string) | Additional tags | `{}` |
-
-| Output | Type | Description |
-|--------|------|-------------|
-| `environment` | string | Environment name | — |
-| `image_tag_mutability` | string | Tag mutability | `"MUTABLE"` |
 
 | Output | Type | Description |
 |--------|------|-------------|
@@ -1203,14 +1219,26 @@ Uses `aws_ecr_repository` with lifecycle policies, scan-on-push, and configurabl
 
 | Input Variable | Type | Description | Default |
 |---------------|------|-------------|---------|
-| `domain_name` | string | Domain name for hosted zone | — |
+| `project` | string | Project name | `"petclinic"` |
+| `environment` | string | Environment (dev/prod) | — |
+| `domain_name` | string | Hosted zone name (delegated subdomain when the domain is at Cloudflare) | — |
+| `enable_dns` | bool | Create zone, certificate and records (false = HTTP only) | `true` |
+| `app_hostname` | string | Host label of the app record (`petclinic-dev`) | — |
+| `create_alb_record` | bool | Create the alias record (only after the Ingress created the ALB) | `false` |
+| `oidc_provider_arn` | string | EKS OIDC provider ARN (LB controller IRSA role) | — |
+| `oidc_provider_url` | string | EKS OIDC provider URL without https:// | — |
+| `lb_controller_namespace` | string | Controller namespace | `"kube-system"` |
+| `lb_controller_service_account` | string | Controller ServiceAccount | `"aws-load-balancer-controller"` |
 | `tags` | map(string) | Additional tags | `{}` |
 
 | Output | Type | Description |
 |--------|------|-------------|
 | `zone_id` | string | Route 53 hosted zone ID |
 | `name_servers` | list(string) | NS records for delegation |
-| `certificate_arn` | string | ACM certificate ARN |
+| `certificate_arn` | string | Validated ACM certificate ARN |
+| `app_fqdn` | string | Application hostname |
+| `alb_name` | string | Name the Ingress gives the ALB |
+| `lb_controller_role_arn` | string | IRSA role ARN for the LB controller |
 
 ### Module: `secrets`
 

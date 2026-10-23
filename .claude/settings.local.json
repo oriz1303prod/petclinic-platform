@@ -15,6 +15,7 @@
     "aws-knowledge-mcp",
     "awslabs.aws-pricing-mcp-server",
     "context7",
-    "atlassian"
+    "atlassian",
+    "notion"
   ]
 }
