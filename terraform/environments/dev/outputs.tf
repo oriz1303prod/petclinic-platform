@@ -128,3 +128,13 @@ output "lb_controller_role_arn" {
   description = "IRSA role ARN for the AWS Load Balancer Controller"
   value       = module.dns.lb_controller_role_arn
 }
+
+output "eso_role_arn" {
+  description = "IRSA role ARN for the External Secrets Operator ServiceAccount (external-secrets-sa)"
+  value       = module.secrets.eso_role_arn
+}
+
+output "openai_secret_arn" {
+  description = "Secrets Manager ARN of the OpenAI API key secret"
+  value       = module.secrets.openai_secret_arn
+}

@@ -1,0 +1,14 @@
+# Namespace for External Secrets Operator (PETPLAT-34). Applied by scripts/install-eso.sh.
+# Pod Security levels follow the technical spec (Pod Security Admission section).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: external-secrets
+  labels:
+    app.kubernetes.io/name: external-secrets
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/component: infrastructure
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted
