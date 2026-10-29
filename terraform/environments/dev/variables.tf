@@ -37,3 +37,9 @@ variable "create_alb_record" {
   type        = bool
   default     = false
 }
+
+variable "openai_api_key" {
+  description = "OpenAI API key stored in Secrets Manager. Set with TF_VAR_openai_api_key or in the git-ignored terraform.tfvars; never commit it"
+  type        = string
+  sensitive   = true
+}

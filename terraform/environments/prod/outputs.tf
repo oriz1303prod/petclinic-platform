@@ -98,3 +98,13 @@ output "rds_secret_arn" {
   description = "Secrets Manager ARN of the RDS credentials (for External Secrets Operator)"
   value       = module.rds.secret_arn
 }
+
+output "eso_role_arn" {
+  description = "IRSA role ARN for the External Secrets Operator ServiceAccount (external-secrets-sa)"
+  value       = module.secrets.eso_role_arn
+}
+
+output "openai_secret_arn" {
+  description = "Secrets Manager ARN of the OpenAI API key secret"
+  value       = module.secrets.openai_secret_arn
+}

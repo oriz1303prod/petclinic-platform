@@ -1,0 +1,27 @@
+# ExternalSecret for the GenAI service's OpenAI API key (PETPLAT-36).
+# Dev values (namespace petclinic-dev, secret petclinic/dev/...); apply with plain kubectl:
+#   kubectl apply -f k8s/base/external-secrets/openai-api-key.yaml
+# For prod, copy the file and change the namespace and the remoteRef key.
+# The Secrets Manager secret is plaintext, so remoteRef needs only the key.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: openai-api-key
+  namespace: petclinic-dev
+  labels:
+    app.kubernetes.io/name: openai-api-key
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/component: backend
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: ClusterSecretStore
+  target:
+    name: openai-api-key
+    creationPolicy: Owner
+  data:
+    - secretKey: OPENAI_API_KEY
+      remoteRef:
+        key: petclinic/dev/openai-api-key

@@ -4,3 +4,7 @@ project     = "petclinic"
 
 # EKS public API endpoint allow-list (your public IP as /32)
 api_allowed_cidrs = ["203.0.113.10/32"]
+
+# OpenAI API key (sensitive). Prefer the environment variable so it never touches a file:
+#   export TF_VAR_openai_api_key="sk-..."
+# openai_api_key = "sk-..."   # only in the git-ignored terraform.tfvars, never in the example

@@ -423,7 +423,8 @@ RDS credentials are created by the RDS module with `random_password` (16+ chars,
 
 | Parameter | Value |
 |-----------|-------|
-| Installation | kubectl apply (CRDs + controller) |
+| Installation | kubectl apply --server-side (CRDs + controller) via `scripts/install-eso.sh` |
+| Version | `v2.14.0` (release bundle `external-secrets.yaml`, rewritten from `default` to the `external-secrets` namespace) |
 | Namespace | `external-secrets` |
 | Store Type | `ClusterSecretStore` |
 | Provider | AWS Secrets Manager |
@@ -432,8 +433,10 @@ RDS credentials are created by the RDS module with `random_password` (16+ chars,
 ### ClusterSecretStore Configuration
 
 ```yaml
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ClusterSecretStore
+> **Note:** ESO v2.14.0 no longer serves `external-secrets.io/v1beta1`; all ESO manifests use `external-secrets.io/v1`. The `external-secrets-sa` ServiceAccount carries the IRSA role annotation; the controller requests a token for it (jwt auth).
+
 metadata:
   name: aws-secrets-manager
 spec:
@@ -957,7 +960,7 @@ Five IAM Roles for Service Accounts, each with OIDC trust policy scoped to a spe
 
 | Role Name Pattern | K8s ServiceAccount | Namespace | IAM Policy | Used By |
 |-------------------|--------------------|-----------|------------|---------|
-| `petclinic-{env}-eso-role` | `external-secrets-sa` | `external-secrets` | `secretsmanager:GetSecretValue`, `secretsmanager:DescribeSecret` on `arn:aws:secretsmanager:us-east-1:{account}:secret:petclinic/*` | ESO |
+| `petclinic-{env}-eso-role` | `external-secrets-sa` | `external-secrets` | `secretsmanager:GetSecretValue`, `secretsmanager:DescribeSecret` on `arn:aws:secretsmanager:us-east-1:{account}:secret:petclinic/{env}/*` (scoped to its own environment, so the dev role cannot read prod secrets) | ESO |
 | `petclinic-{env}-lb-controller-role` | `aws-load-balancer-controller` | `kube-system` | AWS Load Balancer Controller IAM policy (managed) | ALB Controller |
 | `petclinic-{env}-ebs-csi-role` | `ebs-csi-controller-sa` | `kube-system` | `AmazonEBSCSIDriverPolicy` (AWS managed) | EBS CSI Driver |
 | `petclinic-{env}-argocd-role` | `argocd-server` | `argocd` | Minimal: only needed if ArgoCD accesses AWS resources directly (optional) | ArgoCD |
@@ -1257,12 +1260,23 @@ Uses `aws_secretsmanager_secret` and `aws_secretsmanager_secret_version` resourc
 |--------|------|-------------|
 | `openai_secret_arn` | string | Secrets Manager ARN for OpenAI API key |
 
-Note: RDS credentials are NOT managed by this module — they are in the `rds` module (PETPLAT-23).
+Note: RDS credentials are NOT managed by this module — they are in the `rds` module (PETPLAT-23). The ESO IRSA role (PETPLAT-37) lives in this module because it only exists to read these secrets. No `kms:Decrypt` is granted because all secrets use the default `aws/secretsmanager` key.
+| `enable_config_server_git_secrets` | bool | Create the optional Config Server Git secrets | `false` |
+| `config_server_git_username` | string | Git username (used when enabled) | `null` |
+| `config_server_git_password` | string | Git password or token (used when enabled) | `null` (sensitive) |
+| `recovery_window_in_days` | number | Secret deletion recovery window (0, or 7 to 30) | `7` |
+| `oidc_provider_arn` | string | EKS OIDC provider ARN (for the ESO IRSA role) | — |
+| `oidc_provider_url` | string | EKS OIDC provider URL without `https://` | — |
+| `eso_namespace` | string | Namespace ESO runs in | `"external-secrets"` |
+| `eso_service_account` | string | ServiceAccount the IRSA role trusts | `"external-secrets-sa"` |
 
 ### Module: `karpenter`
 
 **Path:** `terraform/modules/karpenter/`
 
+| `config_server_git_username_secret_arn` | string | ARN of the Git username secret (null when not enabled) |
+| `config_server_git_password_secret_arn` | string | ARN of the Git password secret (null when not enabled) |
+| `eso_role_arn` | string | IRSA role ARN `petclinic-{env}-eso-role` for the ESO ServiceAccount annotation |
 Provisions the IAM roles, SQS queue, and EventBridge rules needed for Karpenter.
 
 | Input Variable | Type | Description | Default |
