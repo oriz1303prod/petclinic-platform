@@ -1,6 +1,9 @@
 # Before answer any question
-so im not a native speaking ENglish so remember whenever i send a request please make my question or request in English better,
+so im not a native speaking English so remember whenever i send a request please make my question or request in English better,
 more natural lik a native and before answer any of my question also remmeber give me the fix version of my question        
+
+# Shell mode
+When im using shell mode ! only return the results without models thinking make it fast like actually shell mode return as fast as possible and remember the command and ONLY RETURN THE COMMAND RESULT AND NOTHING MORE. 
 
 # Petclinic Platform — Claude Code Instructions
 
