@@ -1,0 +1,65 @@
+# Prod overlay (PETPLAT-46, 47): HA replicas, HPA, PDB, quota, namespace petclinic-prod, prod ECR images.
+# Container resources are intentionally the same as base: the spec gives no larger prod numbers and the
+# nodes are t4g.small (Technical Spec > Resource Requests and Limits). Revisit with real metrics.
+# Before the first prod sync: set newTag to a commit SHA or release tag, and replace REPLACE-WITH-PROD-RDS-ID
+# in the datasource patch with the prod RDS endpoint (prod RDS is not deployed yet).
+# With an HPA, the replica counts below are only starting values.
+# Helm translation: docs/k8s-manifests.md (Translation to Helm values) -> helm-values/prod.yaml (E-16).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: petclinic-prod
+resources:
+  - ../../base
+  - resourcequota.yaml
+  - hpa.yaml
+  - pdb.yaml
+replicas:
+  - name: config-server
+    count: 2
+  - name: discovery-server
+    count: 2
+  - name: api-gateway
+    count: 2
+  - name: customers-service
+    count: 2
+  - name: visits-service
+    count: 2
+  - name: vets-service
+    count: 2
+  - name: genai-service
+    count: 1
+  - name: admin-server
+    count: 1
+images:
+  - name: petclinic/config-server
+    newName: 533267001265.dkr.ecr.us-east-1.amazonaws.com/petclinic-prod/config-server
+    newTag: REPLACE_WITH_SHA
+  - name: petclinic/discovery-server
+    newName: 533267001265.dkr.ecr.us-east-1.amazonaws.com/petclinic-prod/discovery-server
+    newTag: REPLACE_WITH_SHA
+  - name: petclinic/api-gateway
+    newName: 533267001265.dkr.ecr.us-east-1.amazonaws.com/petclinic-prod/api-gateway
+    newTag: REPLACE_WITH_SHA
+  - name: petclinic/customers-service
+    newName: 533267001265.dkr.ecr.us-east-1.amazonaws.com/petclinic-prod/customers-service
+    newTag: REPLACE_WITH_SHA
+  - name: petclinic/visits-service
+    newName: 533267001265.dkr.ecr.us-east-1.amazonaws.com/petclinic-prod/visits-service
+    newTag: REPLACE_WITH_SHA
+  - name: petclinic/vets-service
+    newName: 533267001265.dkr.ecr.us-east-1.amazonaws.com/petclinic-prod/vets-service
+    newTag: REPLACE_WITH_SHA
+  - name: petclinic/genai-service
+    newName: 533267001265.dkr.ecr.us-east-1.amazonaws.com/petclinic-prod/genai-service
+    newTag: REPLACE_WITH_SHA
+  - name: petclinic/admin-server
+    newName: 533267001265.dkr.ecr.us-east-1.amazonaws.com/petclinic-prod/admin-server
+    newTag: REPLACE_WITH_SHA
+patches:
+  - target:
+      kind: ConfigMap
+      name: (customers|visits|vets)-service-config
+    patch: |-
+      - op: replace
+        path: /data/SPRING_DATASOURCE_URL
+        value: "jdbc:mysql://petclinic-prod-mysql.REPLACE-WITH-PROD-RDS-ID.us-east-1.rds.amazonaws.com:3306/petclinic"
