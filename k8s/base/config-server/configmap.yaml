@@ -1,0 +1,14 @@
+# GIT_REPO is the config repository. The Config Server reads it only with the `native` profile;
+# with the default Git backend it uses the same repository URL from its own application.yml.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-server-config
+  namespace: petclinic-dev  # base default; the overlays set the real namespace
+  labels:
+    app.kubernetes.io/name: config-server
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: server
+data:
+  GIT_REPO: https://github.com/spring-petclinic/spring-petclinic-microservices-config
