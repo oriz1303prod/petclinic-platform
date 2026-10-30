@@ -5,6 +5,9 @@
 > **Convention:** Dev environment is built during the course. Prod values are defined here but implementation is a **student assignment** unless noted otherwise.
 > 
 > **Update**:** Whenever complete the ticket changes the status to "Done"
+> 
+> **Build**:** If any steps of destroy and rebuild are changes please update in the Notion page "Petclinic Microservices"
+
 ---
 
 ## Table of Contents
@@ -331,7 +334,7 @@ ECR Private: 500 MB free tier, then $0.10/GB/month. With 8 services at ~200 MB e
 
 | Parameter | Dev | Prod |
 |-----------|-----|------|
-| Engine | MySQL 8.0 | MySQL 8.0 |
+| Engine | MySQL 8.4 | MySQL 8.4 |
 | Instance Class | `db.t4g.micro` | `db.t4g.micro` |
 | Multi-AZ | `false` | `false` (single-AZ, cost optimization for learning) |
 | Allocated Storage | 20 GB | 20 GB |
@@ -431,6 +434,8 @@ RDS credentials are created by the RDS module with `random_password` (16+ chars,
 | Auth | IRSA (see [IRSA Roles](#irsa-roles)) |
 
 ### ClusterSecretStore Configuration
+
+> **Note:** ESO v2.14.0 no longer serves `external-secrets.io/v1beta1`; all ESO manifests use `external-secrets.io/v1`. The `external-secrets-sa` ServiceAccount carries the IRSA role annotation; the controller requests a token for it (jwt auth).
 
 ```yaml
 apiVersion: external-secrets.io/v1
@@ -643,7 +648,7 @@ API Gateway gets higher CPU (200m/1000m) because it handles all incoming traffic
 
 | Variable | Value | Source |
 |----------|-------|--------|
-| `SPRING_PROFILES_ACTIVE` | `docker` (non-DB) or `docker,mysql` (DB services) | Deployment spec |
+| `SPRING_PROFILES_ACTIVE` | `docker` (non-DB) or `docker,mysql` (DB services). vets-service and genai-service add `production` (`docker,mysql,production` and `docker,production`) because this variable replaces the profile list in `application.yml`, which would otherwise drop it (vets Caffeine cache needs it) | Deployment spec |
 | `CONFIG_SERVER_URL` | `http://config-server:8888` | ConfigMap |
 
 **DB services (customers, visits, vets) — additional:**
@@ -678,6 +683,8 @@ Services that depend on Discovery Server (all except Config Server) add a second
     image: busybox:1.36
     command: ['sh', '-c', 'until wget -qO- http://discovery-server:8761/actuator/health; do sleep 5; done']
 ```
+
+visits-service adds a third init container, `wait-for-customers-service` (`http://customers-service:8081/actuator/health`), because it starts after customers. Init containers have their own requests and limits (10m/16Mi to 50m/32Mi) and run with `readOnlyRootFilesystem: true`.
 
 ### SecurityContext (All Deployments)
 
@@ -760,6 +767,8 @@ HPA requires Metrics Server to be installed (PETPLAT-72).
 | Max CPU | 4 | 4 |
 | Max Memory | 4Gi | 4Gi |
 | Max Pods | 30 | 30 |
+
+The quota is enforced on **requests** (`requests.cpu`, `requests.memory`, `pods`). A limits quota cannot fit the 512Mi limits of 8 services under 4Gi. Prod at the HPA maximum (26 pods) needs 3.2 CPU and 3.25Gi of requests.
 
 ### Helm Values Structure (replaces Kustomize overlays)
 
@@ -1254,11 +1263,22 @@ Uses `aws_secretsmanager_secret` and `aws_secretsmanager_secret_version` resourc
 | `project` | string | Project name | `"petclinic"` |
 | `environment` | string | Environment | — |
 | `openai_api_key` | string | OpenAI API key value | — (sensitive) |
+| `enable_config_server_git_secrets` | bool | Create the optional Config Server Git secrets | `false` |
+| `config_server_git_username` | string | Git username (used when enabled) | `null` |
+| `config_server_git_password` | string | Git password or token (used when enabled) | `null` (sensitive) |
+| `recovery_window_in_days` | number | Secret deletion recovery window (0, or 7 to 30) | `7` |
+| `oidc_provider_arn` | string | EKS OIDC provider ARN (for the ESO IRSA role) | — |
+| `oidc_provider_url` | string | EKS OIDC provider URL without `https://` | — |
+| `eso_namespace` | string | Namespace ESO runs in | `"external-secrets"` |
+| `eso_service_account` | string | ServiceAccount the IRSA role trusts | `"external-secrets-sa"` |
 | `tags` | map(string) | Additional tags | `{}` |
 
 | Output | Type | Description |
 |--------|------|-------------|
 | `openai_secret_arn` | string | Secrets Manager ARN for OpenAI API key |
+| `config_server_git_username_secret_arn` | string | ARN of the Git username secret (null when not enabled) |
+| `config_server_git_password_secret_arn` | string | ARN of the Git password secret (null when not enabled) |
+| `eso_role_arn` | string | IRSA role ARN `petclinic-{env}-eso-role` for the ESO ServiceAccount annotation |
 
 Note: RDS credentials are NOT managed by this module — they are in the `rds` module (PETPLAT-23). The ESO IRSA role (PETPLAT-37) lives in this module because it only exists to read these secrets. No `kms:Decrypt` is granted because all secrets use the default `aws/secretsmanager` key.
 | `enable_config_server_git_secrets` | bool | Create the optional Config Server Git secrets | `false` |

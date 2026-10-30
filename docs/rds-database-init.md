@@ -41,7 +41,7 @@ Kubernetes Secret, synced by External Secrets Operator from Secrets Manager
 ## Verification (PETPLAT-26, after deploy)
 
 ```bash
-kubectl run mysql-debug -n petclinic-dev --rm -it --image=mysql:8.0 --restart=Never -- \
+kubectl run mysql-debug -n petclinic-dev --rm -it --image=mysql:8.4 --restart=Never -- \
   mysql -h <rds_endpoint> -u petclinic -p -e "USE petclinic; SHOW TABLES;"
 ```
 
