@@ -1,0 +1,119 @@
+# Defaults shared by all 8 services. Merge order (last wins):
+#   values.yaml < helm-values/{service}.yaml < helm-values/{env}.yaml
+# The env file may also hold per-service exceptions under serviceOverrides.{service}.
+
+serviceName: ""            # Set per service; falls back to the release name
+component: service         # app.kubernetes.io/component: service | server | gateway | admin
+environment: dev           # dev | prod, set by helm-values/{env}.yaml
+namespace: ""              # Set by helm-values/{env}.yaml; falls back to the release namespace
+
+replicaCount: 1
+
+image:
+  registry: ""             # Set per environment in helm-values/{env}.yaml, e.g. {account}.dkr.ecr.us-east-1.amazonaws.com/petclinic-dev
+  name: ""                 # ECR image name set per service, e.g. customers-service; empty = serviceName
+  tag: REPLACE_WITH_SHA    # Placeholder, same as the overlays. CI commits the real commit SHA; never latest
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 8080               # Set per service
+containerPort: ""          # Empty = service.port
+
+springProfiles: docker     # SPRING_PROFILES_ACTIVE
+
+# Extra static environment variables beyond SPRING_PROFILES_ACTIVE: [{name: FOO, value: bar}]
+env: []
+
+# Secret-backed environment variables: [{name: ENV_VAR, secretName: k8s-secret, key: key-in-secret}]
+# The Secrets are created by External Secrets (k8s/base/external-secrets/), never from this chart
+secrets: []
+
+# ConfigMap data (non-secret). SPRING_DATASOURCE_URL is added from database.* below
+config: {}
+
+database:
+  enabled: false           # true for customers, visits and vets
+  host: ""                 # RDS endpoint, set per environment
+  port: 3306
+  name: petclinic
+
+# Wait-for containers that enforce the startup order: [{name: wait-for-x, url: http://x:8888/actuator/health}]
+initContainers: []
+initImage:
+  repository: busybox
+  tag: "1.36"
+  pullPolicy: Always
+initResources:
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    cpu: 50m
+    memory: 32Mi
+initSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+  readOnlyRootFilesystem: true
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+probes:
+  startup:
+    path: /actuator/health
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30
+  readiness:
+    path: /actuator/health/readiness
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  liveness:
+    path: /actuator/health/liveness
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+# Pod level
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+# Container level (Spring Boot needs a writable /tmp, so the root filesystem stays writable)
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+  readOnlyRootFilesystem: false
+
+serviceAccount:
+  annotations: {}          # IRSA role annotation when a service needs AWS access
+  automountServiceAccountToken: false
+
+# Rendered only when enabled (needs Metrics Server on the cluster)
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+
+# Rendered only when enabled
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+# Per-service exceptions, normally set in helm-values/{env}.yaml:
+#   serviceOverrides:
+#     api-gateway:
+#       autoscaling: {enabled: true, minReplicas: 2, maxReplicas: 6}
+serviceOverrides: {}

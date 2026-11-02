@@ -1,0 +1,20 @@
+# config-server: starts first, no init containers, no MySQL
+serviceName: config-server
+component: server
+service:
+  port: 8888
+springProfiles: docker
+
+image:
+  name: config-server
+  tag: v1.0.0
+
+config:
+  GIT_REPO: https://github.com/spring-petclinic/spring-petclinic-microservices-config
+
+# Config Server has no readiness/liveness sub-endpoints
+probes:
+  readiness:
+    path: /actuator/health
+  liveness:
+    path: /actuator/health

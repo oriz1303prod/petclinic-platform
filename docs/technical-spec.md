@@ -5,6 +5,9 @@
 > **Convention:** Dev environment is built during the course. Prod values are defined here but implementation is a **student assignment** unless noted otherwise.
 > 
 > **Update**:** Whenever complete the ticket changes the status to "Done"
+> 
+> **Build**:** If any steps of destroy and rebuild are changes please update in the Notion page "Petclinic Microservices"
+
 ---
 
 ## Table of Contents
@@ -331,7 +334,7 @@ ECR Private: 500 MB free tier, then $0.10/GB/month. With 8 services at ~200 MB e
 
 | Parameter | Dev | Prod |
 |-----------|-----|------|
-| Engine | MySQL 8.0 | MySQL 8.0 |
+| Engine | MySQL 8.4 | MySQL 8.4 |
 | Instance Class | `db.t4g.micro` | `db.t4g.micro` |
 | Multi-AZ | `false` | `false` (single-AZ, cost optimization for learning) |
 | Allocated Storage | 20 GB | 20 GB |
@@ -423,7 +426,8 @@ RDS credentials are created by the RDS module with `random_password` (16+ chars,
 
 | Parameter | Value |
 |-----------|-------|
-| Installation | kubectl apply (CRDs + controller) |
+| Installation | kubectl apply --server-side (CRDs + controller) via `scripts/install-eso.sh` |
+| Version | `v2.14.0` (release bundle `external-secrets.yaml`, rewritten from `default` to the `external-secrets` namespace) |
 | Namespace | `external-secrets` |
 | Store Type | `ClusterSecretStore` |
 | Provider | AWS Secrets Manager |
@@ -431,9 +435,13 @@ RDS credentials are created by the RDS module with `random_password` (16+ chars,
 
 ### ClusterSecretStore Configuration
 
+> **Note:** ESO v2.14.0 no longer serves `external-secrets.io/v1beta1`; all ESO manifests use `external-secrets.io/v1`. The `external-secrets-sa` ServiceAccount carries the IRSA role annotation; the controller requests a token for it (jwt auth).
+
 ```yaml
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ClusterSecretStore
+> **Note:** ESO v2.14.0 no longer serves `external-secrets.io/v1beta1`; all ESO manifests use `external-secrets.io/v1`. The `external-secrets-sa` ServiceAccount carries the IRSA role annotation; the controller requests a token for it (jwt auth).
+
 metadata:
   name: aws-secrets-manager
 spec:
@@ -640,7 +648,7 @@ API Gateway gets higher CPU (200m/1000m) because it handles all incoming traffic
 
 | Variable | Value | Source |
 |----------|-------|--------|
-| `SPRING_PROFILES_ACTIVE` | `docker` (non-DB) or `docker,mysql` (DB services) | Deployment spec |
+| `SPRING_PROFILES_ACTIVE` | `docker` (non-DB) or `docker,mysql` (DB services). vets-service and genai-service add `production` (`docker,mysql,production` and `docker,production`) because this variable replaces the profile list in `application.yml`, which would otherwise drop it (vets Caffeine cache needs it) | Deployment spec |
 | `CONFIG_SERVER_URL` | `http://config-server:8888` | ConfigMap |
 
 **DB services (customers, visits, vets) — additional:**
@@ -675,6 +683,8 @@ Services that depend on Discovery Server (all except Config Server) add a second
     image: busybox:1.36
     command: ['sh', '-c', 'until wget -qO- http://discovery-server:8761/actuator/health; do sleep 5; done']
 ```
+
+visits-service adds a third init container, `wait-for-customers-service` (`http://customers-service:8081/actuator/health`), because it starts after customers. Init containers have their own requests and limits (10m/16Mi to 50m/32Mi) and run with `readOnlyRootFilesystem: true`.
 
 ### SecurityContext (All Deployments)
 
@@ -757,6 +767,8 @@ HPA requires Metrics Server to be installed (PETPLAT-72).
 | Max CPU | 4 | 4 |
 | Max Memory | 4Gi | 4Gi |
 | Max Pods | 30 | 30 |
+
+The quota is enforced on **requests** (`requests.cpu`, `requests.memory`, `pods`). A limits quota cannot fit the 512Mi limits of 8 services under 4Gi. Prod at the HPA maximum (26 pods) needs 3.2 CPU and 3.25Gi of requests.
 
 ### Helm Values Structure (replaces Kustomize overlays)
 
@@ -957,7 +969,7 @@ Five IAM Roles for Service Accounts, each with OIDC trust policy scoped to a spe
 
 | Role Name Pattern | K8s ServiceAccount | Namespace | IAM Policy | Used By |
 |-------------------|--------------------|-----------|------------|---------|
-| `petclinic-{env}-eso-role` | `external-secrets-sa` | `external-secrets` | `secretsmanager:GetSecretValue`, `secretsmanager:DescribeSecret` on `arn:aws:secretsmanager:us-east-1:{account}:secret:petclinic/*` | ESO |
+| `petclinic-{env}-eso-role` | `external-secrets-sa` | `external-secrets` | `secretsmanager:GetSecretValue`, `secretsmanager:DescribeSecret` on `arn:aws:secretsmanager:us-east-1:{account}:secret:petclinic/{env}/*` (scoped to its own environment, so the dev role cannot read prod secrets) | ESO |
 | `petclinic-{env}-lb-controller-role` | `aws-load-balancer-controller` | `kube-system` | AWS Load Balancer Controller IAM policy (managed) | ALB Controller |
 | `petclinic-{env}-ebs-csi-role` | `ebs-csi-controller-sa` | `kube-system` | `AmazonEBSCSIDriverPolicy` (AWS managed) | EBS CSI Driver |
 | `petclinic-{env}-argocd-role` | `argocd-server` | `argocd` | Minimal: only needed if ArgoCD accesses AWS resources directly (optional) | ArgoCD |
@@ -1251,18 +1263,40 @@ Uses `aws_secretsmanager_secret` and `aws_secretsmanager_secret_version` resourc
 | `project` | string | Project name | `"petclinic"` |
 | `environment` | string | Environment | — |
 | `openai_api_key` | string | OpenAI API key value | — (sensitive) |
+| `enable_config_server_git_secrets` | bool | Create the optional Config Server Git secrets | `false` |
+| `config_server_git_username` | string | Git username (used when enabled) | `null` |
+| `config_server_git_password` | string | Git password or token (used when enabled) | `null` (sensitive) |
+| `recovery_window_in_days` | number | Secret deletion recovery window (0, or 7 to 30) | `7` |
+| `oidc_provider_arn` | string | EKS OIDC provider ARN (for the ESO IRSA role) | — |
+| `oidc_provider_url` | string | EKS OIDC provider URL without `https://` | — |
+| `eso_namespace` | string | Namespace ESO runs in | `"external-secrets"` |
+| `eso_service_account` | string | ServiceAccount the IRSA role trusts | `"external-secrets-sa"` |
 | `tags` | map(string) | Additional tags | `{}` |
 
 | Output | Type | Description |
 |--------|------|-------------|
 | `openai_secret_arn` | string | Secrets Manager ARN for OpenAI API key |
+| `config_server_git_username_secret_arn` | string | ARN of the Git username secret (null when not enabled) |
+| `config_server_git_password_secret_arn` | string | ARN of the Git password secret (null when not enabled) |
+| `eso_role_arn` | string | IRSA role ARN `petclinic-{env}-eso-role` for the ESO ServiceAccount annotation |
 
-Note: RDS credentials are NOT managed by this module — they are in the `rds` module (PETPLAT-23).
+Note: RDS credentials are NOT managed by this module — they are in the `rds` module (PETPLAT-23). The ESO IRSA role (PETPLAT-37) lives in this module because it only exists to read these secrets. No `kms:Decrypt` is granted because all secrets use the default `aws/secretsmanager` key.
+| `enable_config_server_git_secrets` | bool | Create the optional Config Server Git secrets | `false` |
+| `config_server_git_username` | string | Git username (used when enabled) | `null` |
+| `config_server_git_password` | string | Git password or token (used when enabled) | `null` (sensitive) |
+| `recovery_window_in_days` | number | Secret deletion recovery window (0, or 7 to 30) | `7` |
+| `oidc_provider_arn` | string | EKS OIDC provider ARN (for the ESO IRSA role) | — |
+| `oidc_provider_url` | string | EKS OIDC provider URL without `https://` | — |
+| `eso_namespace` | string | Namespace ESO runs in | `"external-secrets"` |
+| `eso_service_account` | string | ServiceAccount the IRSA role trusts | `"external-secrets-sa"` |
 
 ### Module: `karpenter`
 
 **Path:** `terraform/modules/karpenter/`
 
+| `config_server_git_username_secret_arn` | string | ARN of the Git username secret (null when not enabled) |
+| `config_server_git_password_secret_arn` | string | ARN of the Git password secret (null when not enabled) |
+| `eso_role_arn` | string | IRSA role ARN `petclinic-{env}-eso-role` for the ESO ServiceAccount annotation |
 Provisions the IAM roles, SQS queue, and EventBridge rules needed for Karpenter.
 
 | Input Variable | Type | Description | Default |
@@ -1300,57 +1334,72 @@ helm/
         ├── serviceaccount.yaml # ServiceAccount with IRSA annotation
         ├── hpa.yaml            # HPA (conditional on .Values.autoscaling.enabled)
         ├── pdb.yaml            # PDB (conditional on .Values.podDisruptionBudget.enabled)
-        └── _helpers.tpl        # Template helpers (labels, names, selectors)
+        ├── _helpers.tpl        # Template helpers (names, labels, selectors, image, effective values)
+        └── NOTES.txt           # Post-install notes
 ```
+
+Full guide: [`docs/helm-guide.md`](./helm-guide.md).
 
 ### values.yaml Defaults
 
+Merge order (last wins): `values.yaml` < `helm-values/{service}.yaml` < `helm-values/{env}.yaml`. The env file can also hold per-service exceptions under `serviceOverrides.{service}`, which are applied last.
+
 ```yaml
+serviceName: ""        # per service; names of the Deployment, Service, ConfigMap (-config) and ServiceAccount
+component: service     # service | server | gateway | admin
+environment: dev       # set by the env file
+namespace: ""          # set by the env file
 replicaCount: 1
+
 image:
-  repository: ""   # Set per-service: {account}.dkr.ecr.us-east-1.amazonaws.com/petclinic-{env}/{service}
-  tag: "latest"    # Overridden by CI/CD
-  pullPolicy: IfNotPresent
+  registry: ""         # env file: {account}.dkr.ecr.us-east-1.amazonaws.com/petclinic-{env}
+  name: ""             # per service: ECR image name
+  tag: REPLACE_WITH_SHA  # placeholder (as in the overlays); CI commits the commit SHA, never latest
+  pullPolicy: Always
 
 service:
-  port: 8080       # Overridden per-service
+  type: ClusterIP
+  port: 8080           # per service
+
+springProfiles: docker # SPRING_PROFILES_ACTIVE
+env: []                # extra static env vars: [{name, value}]
+secrets: []            # secret-backed env vars: [{name, secretName, key}]
+config: {}             # ConfigMap data (non-secret)
+database:              # enabled for customers, visits, vets; host from the env file
+  enabled: false
+  host: ""
+  port: 3306
+  name: petclinic
+initContainers: []     # [{name, url}] -> busybox wait-for loop
 
 resources:
-  requests:
-    cpu: 100m
-    memory: 128Mi
-  limits:
-    cpu: 500m
-    memory: 512Mi
+  requests: {cpu: 100m, memory: 128Mi}
+  limits: {cpu: 500m, memory: 512Mi}
 
-probes:
-  readiness:
-    path: /actuator/health/readiness
-    initialDelaySeconds: 30
-    periodSeconds: 10
-  liveness:
-    path: /actuator/health/liveness
-    initialDelaySeconds: 60
-    periodSeconds: 15
+probes:                # startup + readiness + liveness (a startupProbe replaces initialDelaySeconds)
+  startup:   {path: /actuator/health, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30}
+  readiness: {path: /actuator/health/readiness, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3}
+  liveness:  {path: /actuator/health/liveness, periodSeconds: 15, timeoutSeconds: 5, failureThreshold: 3}
 
-env: []              # Additional env vars (set per-service)
-initContainers: []   # Wait-for containers (set per-service)
+securityContext:       # pod level
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  seccompProfile: {type: RuntimeDefault}
+# containerSecurityContext: drop ALL, allowPrivilegeEscalation false, readOnlyRootFilesystem false (Spring Boot needs /tmp)
 
-autoscaling:
+autoscaling:           # hpa.yaml renders only when enabled; the Deployment then has no replicas field
   enabled: false
   minReplicas: 1
   maxReplicas: 4
   targetCPUUtilizationPercentage: 70
 
-podDisruptionBudget:
+podDisruptionBudget:   # pdb.yaml renders only when enabled
   enabled: false
   minAvailable: 1
-
-securityContext:
-  runAsNonRoot: true
-  runAsUser: 1000
-  fsGroup: 1000
 ```
+
+The ResourceQuota is one object per namespace, so it is not part of the chart; it stays in `k8s/overlays/{env}/resourcequota.yaml`.
 
 ### Per-Service Values (`helm-values/`)
 
@@ -1367,6 +1416,21 @@ helm-values/
 ├── dev.yaml                   # Dev overrides: replicas=1, no HPA, no PDB
 └── prod.yaml                  # Prod overrides: replicas=2, HPA enabled, PDB enabled
 ```
+
+### Prod Per-Service Settings (`helm-values/prod.yaml`, `serviceOverrides`)
+
+Same numbers as `k8s/overlays/prod`. Dev has 1 replica, no HPA and no PDB everywhere.
+
+| Service | Replicas | HPA (min-max, 70% CPU) | PDB (minAvailable 1) |
+|---------|----------|------------------------|----------------------|
+| config-server | 2 | no | yes |
+| discovery-server | 2 | no | yes |
+| api-gateway | 2 (HPA) | 2-6 | yes |
+| customers-service | 2 (HPA) | 2-4 | yes |
+| visits-service | 2 (HPA) | 2-4 | yes |
+| vets-service | 2 (HPA) | 2-4 | yes |
+| genai-service | 1 (HPA) | 1-3 | no |
+| admin-server | 1 | no | no |
 
 ### Helm Install / Upgrade Command
 

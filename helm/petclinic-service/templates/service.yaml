@@ -1,0 +1,17 @@
+{{- $v := include "petclinic.values" . | fromYaml -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "petclinic.name" . }}
+  namespace: {{ include "petclinic.namespace" . }}
+  labels:
+    {{- include "petclinic.labels" . | nindent 4 }}
+spec:
+  type: {{ $v.service.type }}
+  selector:
+    {{- include "petclinic.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $v.service.port }}
+      targetPort: http
+      protocol: TCP

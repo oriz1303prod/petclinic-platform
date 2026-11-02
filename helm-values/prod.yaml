@@ -1,0 +1,73 @@
+# Prod overrides (mirrors k8s/overlays/prod). The ResourceQuota stays in k8s/overlays/prod/resourcequota.yaml.
+# Container resources are the same as the defaults on purpose (spec gives no larger prod numbers;
+# nodes are t4g.small). Revisit with real metrics.
+#
+# Before the first prod sync:
+#   1. replace REPLACE_WITH_SHA with the commit SHA of the images pushed to petclinic-prod/* in ECR
+#   2. replace REPLACE-WITH-PROD-RDS-ID in database.host with the prod RDS endpoint
+#   3. install Metrics Server (PETPLAT-72) for the HPAs
+environment: prod
+namespace: petclinic-prod
+
+image:
+  registry: 533267001265.dkr.ecr.us-east-1.amazonaws.com/petclinic-prod
+  tag: REPLACE_WITH_SHA
+
+# 2 replicas by default, no HPA or PDB unless a service opts in below
+replicaCount: 2
+
+autoscaling:
+  enabled: false
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+database:
+  host: petclinic-prod-mysql.REPLACE-WITH-PROD-RDS-ID.us-east-1.rds.amazonaws.com
+
+# Per-service replica counts, HPA and PDB (same numbers as the prod overlay)
+serviceOverrides:
+  config-server:
+    podDisruptionBudget:
+      enabled: true
+  discovery-server:
+    podDisruptionBudget:
+      enabled: true
+  api-gateway:
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+    podDisruptionBudget:
+      enabled: true
+  customers-service:
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 4
+    podDisruptionBudget:
+      enabled: true
+  visits-service:
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 4
+    podDisruptionBudget:
+      enabled: true
+  vets-service:
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 4
+    podDisruptionBudget:
+      enabled: true
+  genai-service:
+    replicaCount: 1
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 3
+  admin-server:
+    replicaCount: 1

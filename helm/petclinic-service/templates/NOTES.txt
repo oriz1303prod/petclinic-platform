@@ -1,0 +1,8 @@
+{{- $v := include "petclinic.values" . | fromYaml -}}
+{{ include "petclinic.name" . }} {{ .Release.Name }} deployed to {{ include "petclinic.namespace" . }} ({{ $v.environment }}).
+
+Image: {{ include "petclinic.image" (dict "v" $v "root" .) }}
+
+Check it:
+  kubectl get po,svc -n {{ include "petclinic.namespace" . }} -l app.kubernetes.io/name={{ include "petclinic.name" . }}
+  kubectl logs deploy/{{ include "petclinic.name" . }} -n {{ include "petclinic.namespace" . }} --tail=50

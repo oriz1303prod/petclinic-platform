@@ -1,0 +1,30 @@
+# customers-service: owners and pets, needs MySQL (datasource host comes from the env file)
+serviceName: customers-service
+component: service
+service:
+  port: 8081
+springProfiles: docker,mysql
+
+image:
+  name: customers-service
+  tag: v1.0.0
+
+config:
+  CONFIG_SERVER_URL: http://config-server:8888
+
+database:
+  enabled: true
+
+secrets:
+  - name: SPRING_DATASOURCE_USERNAME
+    secretName: rds-credentials
+    key: username
+  - name: SPRING_DATASOURCE_PASSWORD
+    secretName: rds-credentials
+    key: password
+
+initContainers:
+  - name: wait-for-config-server
+    url: http://config-server:8888/actuator/health
+  - name: wait-for-discovery-server
+    url: http://discovery-server:8761/actuator/health

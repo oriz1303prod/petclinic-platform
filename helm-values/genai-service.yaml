@@ -1,0 +1,25 @@
+# genai-service: no MySQL, needs the OpenAI key (synced from Secrets Manager by External Secrets).
+# `production` is the spec default profile of this service; it replaces the profile list from application.yml.
+serviceName: genai-service
+component: service
+service:
+  port: 8084
+springProfiles: docker,production
+
+image:
+  name: genai-service
+  tag: v1.0.0
+
+config:
+  CONFIG_SERVER_URL: http://config-server:8888
+
+secrets:
+  - name: OPENAI_API_KEY
+    secretName: openai-api-key
+    key: OPENAI_API_KEY
+
+initContainers:
+  - name: wait-for-config-server
+    url: http://config-server:8888/actuator/health
+  - name: wait-for-discovery-server
+    url: http://discovery-server:8761/actuator/health

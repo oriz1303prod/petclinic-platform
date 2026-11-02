@@ -30,9 +30,9 @@ variable "security_group_id" {
 }
 
 variable "engine_version" {
-  description = "MySQL engine version; \"8.0\" lets RDS pick the latest 8.0 minor"
+  description = "MySQL engine version; \"8.4\" lets RDS pick the latest 8.4 minor"
   type        = string
-  default     = "8.0"
+  default     = "8.4"
 }
 
 variable "instance_class" {

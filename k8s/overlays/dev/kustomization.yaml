@@ -1,0 +1,60 @@
+# Dev overlay (PETPLAT-45): 1 replica everywhere, namespace petclinic-dev, dev ECR images.
+# Container resources are the same as base (already small; the spec gives no dev-specific numbers).
+# Set newTag to the commit SHA of the images pushed to ECR (PETPLAT-85).
+# Helm translation: docs/k8s-manifests.md (Translation to Helm values) -> helm-values/dev.yaml (E-16).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: petclinic-dev
+resources:
+  - ../../base
+  - resourcequota.yaml
+replicas:
+  - name: config-server
+    count: 1
+  - name: discovery-server
+    count: 1
+  - name: api-gateway
+    count: 1
+  - name: customers-service
+    count: 1
+  - name: visits-service
+    count: 1
+  - name: vets-service
+    count: 1
+  - name: genai-service
+    count: 1
+  - name: admin-server
+    count: 1
+images:
+  - name: petclinic/config-server
+    newName: 533267001265.dkr.ecr.us-east-1.amazonaws.com/petclinic-dev/config-server
+    newTag: v1.0.0
+  - name: petclinic/discovery-server
+    newName: 533267001265.dkr.ecr.us-east-1.amazonaws.com/petclinic-dev/discovery-server
+    newTag: v1.0.0
+  - name: petclinic/api-gateway
+    newName: 533267001265.dkr.ecr.us-east-1.amazonaws.com/petclinic-dev/api-gateway
+    newTag: v1.0.0
+  - name: petclinic/customers-service
+    newName: 533267001265.dkr.ecr.us-east-1.amazonaws.com/petclinic-dev/customers-service
+    newTag: v1.0.0
+  - name: petclinic/visits-service
+    newName: 533267001265.dkr.ecr.us-east-1.amazonaws.com/petclinic-dev/visits-service
+    newTag: v1.0.0
+  - name: petclinic/vets-service
+    newName: 533267001265.dkr.ecr.us-east-1.amazonaws.com/petclinic-dev/vets-service
+    newTag: v1.0.0
+  - name: petclinic/genai-service
+    newName: 533267001265.dkr.ecr.us-east-1.amazonaws.com/petclinic-dev/genai-service
+    newTag: v1.0.0
+  - name: petclinic/admin-server
+    newName: 533267001265.dkr.ecr.us-east-1.amazonaws.com/petclinic-dev/admin-server
+    newTag: v1.0.0
+patches:
+  - target:
+      kind: ConfigMap
+      name: (customers|visits|vets)-service-config
+    patch: |-
+      - op: replace
+        path: /data/SPRING_DATASOURCE_URL
+        value: "jdbc:mysql://petclinic-dev-mysql.ckrg0co0eoyj.us-east-1.rds.amazonaws.com:3306/petclinic"

@@ -9,3 +9,7 @@ api_allowed_cidrs = ["203.0.113.10/32"]
 domain_name = "lab.orizdevops.cc"
 # Set to true only after the Ingress has created the ALB (PETPLAT-31)
 create_alb_record = false
+
+# OpenAI API key (sensitive). Prefer the environment variable so it never touches a file:
+#   export TF_VAR_openai_api_key="sk-..."
+# openai_api_key = "sk-..."   # only in the git-ignored terraform.tfvars, never in the example

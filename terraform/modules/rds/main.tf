@@ -51,9 +51,9 @@ resource "aws_db_subnet_group" "this" {
 }
 
 resource "aws_db_parameter_group" "this" {
-  name_prefix = "${local.name}-mysql80-"
+  name_prefix = "${local.name}-mysql84-"
   description = "utf8mb4 settings for ${local.name} RDS MySQL"
-  family      = "mysql8.0"
+  family      = "mysql8.4"
 
   parameter {
     name  = "character_set_server"
@@ -71,7 +71,7 @@ resource "aws_db_parameter_group" "this" {
     value = "1"
   }
 
-  tags = merge(local.common_tags, { Name = "${local.name}-mysql80-params" })
+  tags = merge(local.common_tags, { Name = "${local.name}-mysql84-params" })
 
   lifecycle {
     create_before_destroy = true

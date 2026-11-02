@@ -1,0 +1,15 @@
+{{- $v := include "petclinic.values" . | fromYaml -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "petclinic.name" . }}-config
+  namespace: {{ include "petclinic.namespace" . }}
+  labels:
+    {{- include "petclinic.labels" . | nindent 4 }}
+data:
+  {{- range $key, $value := $v.config }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  {{- if $v.database.enabled }}
+  SPRING_DATASOURCE_URL: {{ printf "jdbc:mysql://%s:%v/%s" (required "database.host is required when database.enabled (set it in helm-values/{env}.yaml)" $v.database.host) $v.database.port $v.database.name | quote }}
+  {{- end }}

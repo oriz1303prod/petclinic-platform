@@ -1,0 +1,15 @@
+{{- $v := include "petclinic.values" . | fromYaml -}}
+{{- if $v.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "petclinic.name" . }}
+  namespace: {{ include "petclinic.namespace" . }}
+  labels:
+    {{- include "petclinic.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ $v.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "petclinic.selectorLabels" . | nindent 6 }}
+{{- end }}

@@ -1,0 +1,86 @@
+{{- $v := include "petclinic.values" . | fromYaml -}}
+{{- $name := include "petclinic.name" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  namespace: {{ include "petclinic.namespace" . }}
+  labels:
+    {{- include "petclinic.labels" . | nindent 4 }}
+spec:
+  {{- /* With an HPA the autoscaler owns the replica count; rendering it would make every sync reset it */}}
+  {{- if not $v.autoscaling.enabled }}
+  replicas: {{ $v.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "petclinic.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "petclinic.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ $name }}
+      securityContext:
+        {{- toYaml $v.securityContext | nindent 8 }}
+      {{- with $v.initContainers }}
+      initContainers:
+        {{- range . }}
+        - name: {{ .name }}
+          image: {{ $v.initImage.repository }}:{{ $v.initImage.tag }}
+          imagePullPolicy: {{ $v.initImage.pullPolicy }}
+          command: ['sh', '-c', 'until wget -qO- {{ .url }}; do sleep 5; done']
+          resources:
+            {{- toYaml $v.initResources | nindent 12 }}
+          securityContext:
+            {{- toYaml $v.initSecurityContext | nindent 12 }}
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: {{ $name }}
+          image: {{ include "petclinic.image" (dict "v" $v "root" .) }}
+          imagePullPolicy: {{ $v.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $v.containerPort | default $v.service.port }}
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: {{ $v.springProfiles | quote }}
+            {{- range $v.secrets }}
+            - name: {{ .name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secretName }}
+                  key: {{ .key }}
+            {{- end }}
+            {{- with $v.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ $name }}-config
+          startupProbe:
+            httpGet:
+              path: {{ $v.probes.startup.path }}
+              port: http
+            periodSeconds: {{ $v.probes.startup.periodSeconds }}
+            timeoutSeconds: {{ $v.probes.startup.timeoutSeconds }}
+            failureThreshold: {{ $v.probes.startup.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: {{ $v.probes.readiness.path }}
+              port: http
+            periodSeconds: {{ $v.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ $v.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ $v.probes.readiness.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: {{ $v.probes.liveness.path }}
+              port: http
+            periodSeconds: {{ $v.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ $v.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ $v.probes.liveness.failureThreshold }}
+          resources:
+            {{- toYaml $v.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml $v.containerSecurityContext | nindent 12 }}
