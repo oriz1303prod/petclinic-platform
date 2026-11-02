@@ -1,0 +1,19 @@
+# Dev overrides (mirrors k8s/overlays/dev): 1 replica everywhere, no HPA, no PDB.
+# The ResourceQuota (requests: 4 CPU, 4Gi, 30 pods) is one object per namespace, so it is not part
+# of this per-service chart; it stays in k8s/overlays/dev/resourcequota.yaml.
+environment: dev
+namespace: petclinic-dev
+
+image:
+  registry: 533267001265.dkr.ecr.us-east-1.amazonaws.com/petclinic-dev
+
+replicaCount: 1
+
+autoscaling:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: false
+
+database:
+  host: petclinic-dev-mysql.ckrg0co0eoyj.us-east-1.rds.amazonaws.com

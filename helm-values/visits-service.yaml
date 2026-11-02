@@ -1,0 +1,32 @@
+# visits-service: visit records, needs MySQL, also waits for customers-service
+serviceName: visits-service
+component: service
+service:
+  port: 8082
+springProfiles: docker,mysql
+
+image:
+  name: visits-service
+  tag: v1.0.0
+
+config:
+  CONFIG_SERVER_URL: http://config-server:8888
+
+database:
+  enabled: true
+
+secrets:
+  - name: SPRING_DATASOURCE_USERNAME
+    secretName: rds-credentials
+    key: username
+  - name: SPRING_DATASOURCE_PASSWORD
+    secretName: rds-credentials
+    key: password
+
+initContainers:
+  - name: wait-for-config-server
+    url: http://config-server:8888/actuator/health
+  - name: wait-for-discovery-server
+    url: http://discovery-server:8761/actuator/health
+  - name: wait-for-customers-service
+    url: http://customers-service:8081/actuator/health

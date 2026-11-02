@@ -1,0 +1,6 @@
+apiVersion: v2
+name: petclinic-service
+description: Generic chart for the 8 Spring Petclinic microservices (one release per service per environment)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

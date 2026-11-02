@@ -1,0 +1,28 @@
+# api-gateway: public entry point (behind the Ingress), higher CPU than the other services
+serviceName: api-gateway
+component: gateway
+service:
+  port: 8080
+springProfiles: docker
+
+image:
+  name: api-gateway
+  tag: v1.0.0
+
+config:
+  CONFIG_SERVER_URL: http://config-server:8888
+  DISCOVERY_SERVER_URL: http://discovery-server:8761/eureka/
+
+initContainers:
+  - name: wait-for-config-server
+    url: http://config-server:8888/actuator/health
+  - name: wait-for-discovery-server
+    url: http://discovery-server:8761/actuator/health
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 128Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi
