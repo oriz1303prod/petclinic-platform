@@ -1,0 +1,17 @@
+# discovery-server (Eureka): starts second, waits for the Config Server
+serviceName: discovery-server
+component: server
+service:
+  port: 8761
+springProfiles: docker
+
+image:
+  name: discovery-server
+  tag: v1.0.0
+
+config:
+  CONFIG_SERVER_URL: http://config-server:8888
+
+initContainers:
+  - name: wait-for-config-server
+    url: http://config-server:8888/actuator/health

@@ -1,0 +1,19 @@
+# admin-server: Spring Boot Admin dashboard, no MySQL
+serviceName: admin-server
+component: admin
+service:
+  port: 9090
+springProfiles: docker
+
+image:
+  name: admin-server
+  tag: v1.0.0
+
+config:
+  CONFIG_SERVER_URL: http://config-server:8888
+
+initContainers:
+  - name: wait-for-config-server
+    url: http://config-server:8888/actuator/health
+  - name: wait-for-discovery-server
+    url: http://discovery-server:8761/actuator/health

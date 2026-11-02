@@ -1334,57 +1334,72 @@ helm/
         ├── serviceaccount.yaml # ServiceAccount with IRSA annotation
         ├── hpa.yaml            # HPA (conditional on .Values.autoscaling.enabled)
         ├── pdb.yaml            # PDB (conditional on .Values.podDisruptionBudget.enabled)
-        └── _helpers.tpl        # Template helpers (labels, names, selectors)
+        ├── _helpers.tpl        # Template helpers (names, labels, selectors, image, effective values)
+        └── NOTES.txt           # Post-install notes
 ```
+
+Full guide: [`docs/helm-guide.md`](./helm-guide.md).
 
 ### values.yaml Defaults
 
+Merge order (last wins): `values.yaml` < `helm-values/{service}.yaml` < `helm-values/{env}.yaml`. The env file can also hold per-service exceptions under `serviceOverrides.{service}`, which are applied last.
+
 ```yaml
+serviceName: ""        # per service; names of the Deployment, Service, ConfigMap (-config) and ServiceAccount
+component: service     # service | server | gateway | admin
+environment: dev       # set by the env file
+namespace: ""          # set by the env file
 replicaCount: 1
+
 image:
-  repository: ""   # Set per-service: {account}.dkr.ecr.us-east-1.amazonaws.com/petclinic-{env}/{service}
-  tag: "latest"    # Overridden by CI/CD
-  pullPolicy: IfNotPresent
+  registry: ""         # env file: {account}.dkr.ecr.us-east-1.amazonaws.com/petclinic-{env}
+  name: ""             # per service: ECR image name
+  tag: REPLACE_WITH_SHA  # placeholder (as in the overlays); CI commits the commit SHA, never latest
+  pullPolicy: Always
 
 service:
-  port: 8080       # Overridden per-service
+  type: ClusterIP
+  port: 8080           # per service
+
+springProfiles: docker # SPRING_PROFILES_ACTIVE
+env: []                # extra static env vars: [{name, value}]
+secrets: []            # secret-backed env vars: [{name, secretName, key}]
+config: {}             # ConfigMap data (non-secret)
+database:              # enabled for customers, visits, vets; host from the env file
+  enabled: false
+  host: ""
+  port: 3306
+  name: petclinic
+initContainers: []     # [{name, url}] -> busybox wait-for loop
 
 resources:
-  requests:
-    cpu: 100m
-    memory: 128Mi
-  limits:
-    cpu: 500m
-    memory: 512Mi
+  requests: {cpu: 100m, memory: 128Mi}
+  limits: {cpu: 500m, memory: 512Mi}
 
-probes:
-  readiness:
-    path: /actuator/health/readiness
-    initialDelaySeconds: 30
-    periodSeconds: 10
-  liveness:
-    path: /actuator/health/liveness
-    initialDelaySeconds: 60
-    periodSeconds: 15
+probes:                # startup + readiness + liveness (a startupProbe replaces initialDelaySeconds)
+  startup:   {path: /actuator/health, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30}
+  readiness: {path: /actuator/health/readiness, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3}
+  liveness:  {path: /actuator/health/liveness, periodSeconds: 15, timeoutSeconds: 5, failureThreshold: 3}
 
-env: []              # Additional env vars (set per-service)
-initContainers: []   # Wait-for containers (set per-service)
+securityContext:       # pod level
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  seccompProfile: {type: RuntimeDefault}
+# containerSecurityContext: drop ALL, allowPrivilegeEscalation false, readOnlyRootFilesystem false (Spring Boot needs /tmp)
 
-autoscaling:
+autoscaling:           # hpa.yaml renders only when enabled; the Deployment then has no replicas field
   enabled: false
   minReplicas: 1
   maxReplicas: 4
   targetCPUUtilizationPercentage: 70
 
-podDisruptionBudget:
+podDisruptionBudget:   # pdb.yaml renders only when enabled
   enabled: false
   minAvailable: 1
-
-securityContext:
-  runAsNonRoot: true
-  runAsUser: 1000
-  fsGroup: 1000
 ```
+
+The ResourceQuota is one object per namespace, so it is not part of the chart; it stays in `k8s/overlays/{env}/resourcequota.yaml`.
 
 ### Per-Service Values (`helm-values/`)
 
@@ -1401,6 +1416,21 @@ helm-values/
 ├── dev.yaml                   # Dev overrides: replicas=1, no HPA, no PDB
 └── prod.yaml                  # Prod overrides: replicas=2, HPA enabled, PDB enabled
 ```
+
+### Prod Per-Service Settings (`helm-values/prod.yaml`, `serviceOverrides`)
+
+Same numbers as `k8s/overlays/prod`. Dev has 1 replica, no HPA and no PDB everywhere.
+
+| Service | Replicas | HPA (min-max, 70% CPU) | PDB (minAvailable 1) |
+|---------|----------|------------------------|----------------------|
+| config-server | 2 | no | yes |
+| discovery-server | 2 | no | yes |
+| api-gateway | 2 (HPA) | 2-6 | yes |
+| customers-service | 2 (HPA) | 2-4 | yes |
+| visits-service | 2 (HPA) | 2-4 | yes |
+| vets-service | 2 (HPA) | 2-4 | yes |
+| genai-service | 1 (HPA) | 1-3 | no |
+| admin-server | 1 | no | no |
 
 ### Helm Install / Upgrade Command
 
