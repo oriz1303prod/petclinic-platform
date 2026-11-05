@@ -5,19 +5,15 @@ component: service
 service:
   port: 8084
 springProfiles: docker,production
-
 image:
   name: genai-service
-  tag: v1.0.0
-
+  tag: "480e021"
 config:
   CONFIG_SERVER_URL: http://config-server:8888
-
 secrets:
   - name: OPENAI_API_KEY
     secretName: openai-api-key
     key: OPENAI_API_KEY
-
 initContainers:
   - name: wait-for-config-server
     url: http://config-server:8888/actuator/health
