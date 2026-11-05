@@ -104,4 +104,6 @@ module "github_oidc" {
   project         = var.project
   github_username = "oriz1303prod"
   github_repo     = "spring-petclinic-microservices"
+  github_owner_id = "332028694"
+  github_repo_id  = "1383121042"
 }

@@ -21,6 +21,16 @@ variable "github_repo" {
   default     = "spring-petclinic-microservices"
 }
 
+variable "github_owner_id" {
+  description = "Numeric GitHub owner ID (visible in OIDC sub claim). Find via: curl -s https://api.github.com/users/USERNAME | jq .id"
+  type        = string
+}
+
+variable "github_repo_id" {
+  description = "Numeric GitHub repo ID (visible in OIDC sub claim). Find via: curl -s https://api.github.com/repos/OWNER/REPO | jq .id"
+  type        = string
+}
+
 variable "tags" {
   description = "Additional tags to merge with default tags"
   type        = map(string)
