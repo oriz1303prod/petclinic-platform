@@ -809,31 +809,62 @@ GitHub Actions handles **CI only** (build, test, push images). **ArgoCD handles 
 |-----------|-------|
 | OIDC Provider | `token.actions.githubusercontent.com` |
 | Audience | `sts.amazonaws.com` |
-| Subject Filter | `repo:{org}/{repo}:ref:refs/heads/main` |
+| Subject Filter | `repo:{owner}@{owner_id}/{repo}@{repo_id}:ref:refs/heads/main` (immutable format, see below) |
 | IAM Role | `petclinic-github-actions-role` |
 | Permissions | ECR push only (`ecr:GetAuthorizationToken`, `ecr:BatchCheckLayerAvailability`, `ecr:PutImage`, layer upload actions) — no S3, no DynamoDB (CI workflows do not run Terraform) |
+
+> **Immutable OIDC Subject Claims (April 2026):** GitHub changed the OIDC `sub` claim format to include numeric IDs: `repo:owner@OWNER_ID/repo@REPO_ID:ref:refs/heads/main`. The `@` separator is used because `@` cannot appear in GitHub usernames or repo names. This prevents attacks where a renamed/deleted username is reclaimed to assume an IAM role. Repos created after the rollout use this format by default. Find IDs via: `curl -s https://api.github.com/users/OWNER | jq .id` and `curl -s https://api.github.com/repos/OWNER/REPO | jq .id`. Trust policy must use `StringEquals` with the exact claim including IDs. Reference: [GitHub Changelog](https://github.blog/changelog/2026-04-23-immutable-subject-claims-for-github-actions-oidc-tokens/).
 
 ### GitHub Secrets
 
 | Secret Name | Purpose |
 |-------------|---------|
-| `AWS_REGION` | `us-east-1` |
 | `AWS_ROLE_ARN` | OIDC role ARN for `aws-actions/configure-aws-credentials` |
-| `AWS_ACCOUNT_ID` | AWS account ID (for ECR registry URL) |
+| `PLATFORM_REPO_TOKEN` | GitHub PAT with write access to the platform repo (for `repository_dispatch`) |
 
 ### Build Steps (build-push.yml)
 
-1. Checkout application repo
-2. Set up JDK 17
-3. Set up Docker Buildx + QEMU (for ARM64 cross-compilation)
-4. Configure AWS credentials (OIDC)
-5. Login to ECR: `aws ecr get-login-password --region us-east-1`
-6. Maven build: `./mvnw clean install -P buildDocker -Dcontainer.platform="linux/arm64"`
-7. Trivy scan: fail on CRITICAL CVEs
-8. Tag images with commit SHA (short, 7 chars): `${GITHUB_SHA::7}`
-9. Push all 8 images to ECR
+4-job pipeline: `detect-changes` → `build-jars` → `build-push-images` (matrix) → `notify-platform`
+
+**Job 1 — detect-changes:** Uses `dorny/paths-filter@v3` to detect which `spring-petclinic-*` directories changed. Outputs a JSON matrix of `{service, module, port}` objects. Only changed services are built.
+
+**Job 2 — build-jars:** Runs `./mvnw clean package -DskipTests -B` once. Uploads JARs as a shared artifact (`service-jars`).
+
+**Job 3 — build-push-images (matrix):** Runs in parallel for each changed service:
+1. Download JARs artifact
+2. Set up QEMU + Docker Buildx (ARM64 cross-compilation on x86 runners)
+3. Configure AWS credentials (OIDC) + Login to ECR
+4. Build ARM64 image as OCI tarball (`--output type=oci,dest=/tmp/image.tar`) — `--load` and `--platform linux/arm64` are mutually exclusive, so OCI export is required for scanning
+5. Extract OCI tarball to directory layout (`tar -xf /tmp/image.tar -C /tmp/image-oci`) — Trivy expects an OCI directory with `index.json` on disk, not a tar archive
+6. **Trivy scan (JSON report):** `aquasecurity/trivy-action@v0.36.0`, exit-code 0, saves `trivy-report.json` as artifact (30-day retention)
+7. **HIGH vulnerability check:** Parses JSON report with `jq`, emits `::warning::` annotation if any HIGH CVEs found
+8. **CRITICAL gate:** Second Trivy scan with exit-code 1, severity CRITICAL — blocks the pipeline if any CRITICAL CVE exists
+9. Push image to ECR, tagged with commit SHA (`${GITHUB_SHA::7}`)
+
+**Job 4 — notify-platform:** Sends `repository_dispatch` event (`app-image-built`) to `petclinic-platform` repo with `{sha, services}` payload. Uses `peter-evans/repository-dispatch@v3`.
+
+> **Trivy CVE management:** Use `.trivyignore` in the repo root to allowlist accepted CVEs (one CVE-ID per line). Always document the reason and review date. See: `aquasecurity/trivy-action@v0.36.0` — must use `v`-prefixed tags due to the March 2026 supply chain attack that compromised old non-prefixed tags.
 
 > **ARM cross-compilation:** GitHub Actions runners are x86_64. Building ARM64 images requires QEMU emulation via `docker/setup-qemu-action` and `docker/setup-buildx-action`. Build time increases from ~2 min to ~5 min per image, which is acceptable for a learning project.
+
+### CI/CD Known Issues and Fixes
+
+| # | Bug | Root Cause | Fix | Date |
+|---|-----|-----------|-----|------|
+| 1 | `trivy-action@0.28.0` version not found | March 2026 supply chain attack — old non-`v`-prefixed tags deleted, can't be recreated | Use `aquasecurity/trivy-action@v0.36.0` (v-prefixed) | 2026-11-05 |
+| 2 | `Not authorized to perform sts:AssumeRoleWithWebIdentity` | GitHub immutable subject claims (April 2026) — OIDC `sub` now includes numeric IDs: `owner@OWNER_ID/repo@REPO_ID` | Trust policy: `StringEquals` with exact claim including `@332028694` and `@1383121042`. Added `github_owner_id`/`github_repo_id` variables. Debug with CloudTrail: `aws cloudtrail lookup-events --lookup-attributes AttributeKey=EventName,AttributeValue=AssumeRoleWithWebIdentity` | 2026-11-05 |
+| 3 | `PLATFORM_REPO` env var referenced but never defined | Typo in notify-platform job | Hardcoded `petclinic-platform` directly in `repository-dispatch` step | 2026-11-05 |
+| 4 | `github_actions_role_arn` not in terraform output | Missing output re-exports in environment root module | Added outputs to `terraform/environments/dev/outputs.tf` | 2026-11-05 |
+| 5 | Trivy: `unable to open /tmp/image.tar as an OCI Image: stat index.json: not a directory` | Trivy `input` expects OCI **directory** layout (with `index.json` on disk), not an OCI **tarball** archive | Extract tar before scanning: `mkdir -p /tmp/image-oci && tar -xf /tmp/image.tar -C /tmp/image-oci`, then point `input:` at `/tmp/image-oci` | 2026-11-05 |
+| 6 | Claude Code hook false positive on `git add .github/...` | `block-secret-commit.sh` regex `\.` matches `.github` (no end anchor) | Workaround: use `git add -- ".github/..."`. TODO: fix regex to `\.\s` or `\.$` | 2026-11-05 |
+
+### Reusable Workflows
+
+| Workflow | Purpose |
+|----------|---------|
+| `.github/workflows/reusable/ecr-login.yml` | OIDC + ECR login as `workflow_call` — template for reusable workflow patterns (PETPLAT-53) |
+
+> **Note:** `build-push.yml` performs its own inline ECR login because Docker credentials are per-runner and cannot be shared across jobs via a reusable workflow's outputs.
 
 ### Update Image Tags Steps (update-image-tags.yml)
 
