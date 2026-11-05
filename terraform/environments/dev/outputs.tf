@@ -138,3 +138,13 @@ output "openai_secret_arn" {
   description = "Secrets Manager ARN of the OpenAI API key secret"
   value       = module.secrets.openai_secret_arn
 }
+
+output "github_oidc_provider_arn" {
+  description = "ARN of the GitHub Actions OIDC provider"
+  value       = module.github_oidc.oidc_provider_arn
+}
+
+output "github_actions_role_arn" {
+  description = "ARN of the GitHub Actions IAM role (set as AWS_ROLE_ARN secret in the app repo)"
+  value       = module.github_oidc.role_arn
+}

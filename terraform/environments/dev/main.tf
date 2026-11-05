@@ -28,7 +28,7 @@ module "eks" {
   node_instance_types = ["t4g.small"]
   node_min_size       = 2
   node_max_size       = 4
-  node_desired_size   = 2
+  node_desired_size   = 3
 }
 
 module "ecr" {
@@ -96,4 +96,12 @@ module "secrets" {
 
   oidc_provider_arn = module.eks.oidc_provider_arn
   oidc_provider_url = module.eks.oidc_provider_url
+}
+
+module "github_oidc" {
+  source = "../../modules/github-oidc"
+
+  project         = var.project
+  github_username = "oriz1303prod"
+  github_repo     = "spring-petclinic-microservices"
 }

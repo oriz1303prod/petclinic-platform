@@ -114,6 +114,18 @@ With an HPA enabled the Deployment has no `replicas` field; the HPA `minReplicas
    ```
 2. Deploy. The release name equals the service name.
    ```bash
+   helm upgrade --install config-server helm/petclinic-service/ \
+     -n petclinic-dev \
+     -f helm-values/config-server.yaml \
+     -f helm-values/dev.yaml \
+     --set image.tag=v1.0.0
+
+   helm upgrade --install discovery-server helm/petclinic-service/ \
+     -n petclinic-dev \
+     -f helm-values/discovery-server.yaml \
+     -f helm-values/dev.yaml \
+     --set image.tag=v1.0.0  
+
    helm upgrade --install customers-service helm/petclinic-service/ \
      -n petclinic-dev \
      -f helm-values/customers-service.yaml \
