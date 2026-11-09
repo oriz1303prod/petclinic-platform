@@ -7,7 +7,7 @@ service:
 springProfiles: docker,production
 image:
   name: genai-service
-  tag: "480e021"
+  tag: "297179b"
 config:
   CONFIG_SERVER_URL: http://config-server:8888
 secrets:
