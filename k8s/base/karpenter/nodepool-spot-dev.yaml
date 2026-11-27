@@ -1,0 +1,34 @@
+# Apply this file AFTER the Graviton free trial expires to enable Spot savings (PETPLAT-74).
+#   kubectl apply -f k8s/base/karpenter/nodepool-spot-dev.yaml
+#
+# Deliberately separate from nodepool.yaml - do not merge them. This NodePool has the same name
+# ("default") so applying it REPLACES the on-demand one; the EC2NodeClass from nodepool.yaml is
+# reused, so apply nodepool.yaml first. Roll back with: kubectl apply -f k8s/base/karpenter/nodepool.yaml
+# Spot interruptions are handled through the SQS queue / EventBridge rules from the karpenter module.
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: default
+spec:
+  template:
+    spec:
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["arm64"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot", "on-demand"]   # Karpenter prefers Spot and falls back to on-demand
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: ["t4g.small", "t4g.medium"]
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+  limits:
+    cpu: "8"
+    memory: 32Gi
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 30s

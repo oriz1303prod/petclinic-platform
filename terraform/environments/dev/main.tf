@@ -107,3 +107,43 @@ module "github_oidc" {
   github_owner_id = "332028694"
   github_repo_id  = "1383121042"
 }
+
+module "karpenter" {
+  source = "../../modules/karpenter"
+
+  project     = var.project
+  environment = var.environment
+
+  cluster_name      = module.eks.cluster_name
+  oidc_provider_arn = module.eks.oidc_provider_arn
+  oidc_provider_url = module.eks.oidc_provider_url
+  node_role_arn     = module.eks.node_role_arn
+}
+
+# Monthly cost guardrail (PETPLAT-75). ACTUAL spend so alerts fire on real charges.
+# Note: with no cost filter this budget covers the whole AWS account.
+resource "aws_budgets_budget" "monthly" {
+  name         = "${var.project}-${var.environment}-monthly-budget"
+  budget_type  = "COST"
+  limit_amount = tostring(var.monthly_budget_usd)
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
+
+  dynamic "notification" {
+    for_each = [50, 80, 100]
+
+    content {
+      comparison_operator        = "GREATER_THAN"
+      threshold                  = notification.value
+      threshold_type             = "PERCENTAGE"
+      notification_type          = "ACTUAL"
+      subscriber_email_addresses = [var.budget_alert_email]
+    }
+  }
+
+  tags = {
+    Project     = var.project
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  }
+}

@@ -1,0 +1,76 @@
+# Karpenter controller install (PETPLAT-73) - installed with Helm, NOT applied with kubectl.
+# This file documents the command; it contains no Kubernetes objects.
+#
+# Namespace:      kube-system
+# ServiceAccount: karpenter (annotated with the IRSA role from the Terraform karpenter module)
+# Chart version:  1.9.4 - the cluster runs Kubernetes 1.35, which needs Karpenter >= 1.9
+#                 (1.0.0 only supports up to Kubernetes 1.31). See the compatibility matrix:
+#                 https://karpenter.sh/docs/upgrading/compatibility/
+#
+# Prerequisites:
+#   1. terraform apply in terraform/environments/dev (creates the IRSA role, SQS queue, instance
+#      profile and the karpenter.sh/discovery tags on the subnets and node security group)
+#   2. Metrics Server applied: kubectl apply -f k8s/base/karpenter/metrics-server.yaml
+#   3. kubeconfig: aws eks update-kubeconfig --name petclinic-dev --region us-east-1
+#
+# Generic command (run from terraform/environments/dev; use prod/ for prod):
+#
+#   helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter \
+#     --version 1.9.4 \
+#     --namespace kube-system \
+#     --set settings.clusterName=$(terraform output -raw eks_cluster_name) \
+#     --set settings.interruptionQueue=$(terraform output -raw karpenter_queue_name) \
+#     --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=$(terraform output -raw karpenter_role_arn) \
+#     --set replicas=1 \
+#     --set controller.resources.requests.cpu=100m \
+#     --set controller.resources.requests.memory=256Mi \
+#     --set controller.resources.limits.cpu=1 \
+#     --set controller.resources.limits.memory=512Mi \
+#     --wait
+
+kubectl apply -f nodepool-spot-dev.yaml
+
+helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter \
+  --version 1.9.4 \
+  --namespace kube-system \
+  --set "serviceAccount.annotations.eks\.amazonaws\.com/role-arn=$(terraform output -raw karpenter_role_arn)" \
+  --set "settings.clusterName=petclinic-dev" \
+  --set "settings.interruptionQueue=petclinic-dev-karpenter-interruption" \
+  --set "controller.resources.requests.cpu=100m" \
+  --set "controller.resources.requests.memory=256Mi" \
+  --set "controller.resources.limits.cpu=1" \
+  --set "controller.resources.limits.memory=512Mi" \
+  --wait
+
+### Karpenter test ## 
+kubectl create deployment karpenter-test \
+  --image=public.ecr.aws/eks-distro/kubernetes/pause:3.7 \
+  --replicas=5
+kubectl patch deployment karpenter-test -p '{"spec":{"template":{"spec":{"containers":[{"name":"pause","resources":{"requests":{"cpu":"500m","memory":"512Mi"}}}]}}}}'
+
+#
+# Same command with the dev values the Terraform karpenter module produces
+# (names follow petclinic-{env}-...; confirm with `terraform output` after apply):
+#
+#   helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter \
+#     --version 1.9.4 \
+#     --namespace kube-system \
+#     --set settings.clusterName=petclinic-dev \
+#     --set settings.interruptionQueue=petclinic-dev-karpenter-interruption \
+#     --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=arn:aws:iam::533267001265:role/petclinic-dev-karpenter-role \
+#     --set replicas=1 \
+#     --set controller.resources.requests.cpu=100m \
+#     --set controller.resources.requests.memory=256Mi \
+#     --set controller.resources.limits.cpu=1 \
+#     --set controller.resources.limits.memory=512Mi \
+#     --wait
+#
+# The resource flags keep the controller small: the t4g.small nodes run at 90%+ memory and the chart
+# default (2 replicas, 1 CPU / 1Gi each) would stay Pending.
+#
+# Verify:
+#   kubectl -n kube-system get pods -l app.kubernetes.io/name=karpenter
+#   kubectl -n kube-system logs -l app.kubernetes.io/name=karpenter --tail=50
+#
+# Then create the NodePool and EC2NodeClass:
+#   kubectl apply -f k8s/base/karpenter/nodepool.yaml

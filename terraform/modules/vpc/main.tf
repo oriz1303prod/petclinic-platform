@@ -53,6 +53,7 @@ resource "aws_subnet" "public" {
     Name                                  = "${local.name}-public-${var.availability_zones[count.index]}"
     "kubernetes.io/cluster/${local.name}" = "shared"
     "kubernetes.io/role/elb"              = "1"
+    "karpenter.sh/discovery"              = local.name # Karpenter EC2NodeClass subnet selector
   })
 }
 
@@ -93,7 +94,10 @@ resource "aws_security_group" "eks_node" {
   description = "EKS worker node security group"
   vpc_id      = aws_vpc.this.id
 
-  tags = merge(local.common_tags, { Name = "${local.name}-eks-node-sg" })
+  tags = merge(local.common_tags, {
+    Name                     = "${local.name}-eks-node-sg"
+    "karpenter.sh/discovery" = local.name # Karpenter EC2NodeClass security group selector
+  })
 }
 
 resource "aws_security_group" "rds" {

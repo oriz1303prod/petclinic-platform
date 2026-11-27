@@ -1,0 +1,64 @@
+# Karpenter NodePool + EC2NodeClass (PETPLAT-73). Dev values (cluster petclinic-dev);
+# for prod replace "dev" with "prod" in the discovery tag values and the instance profile.
+#   kubectl apply -f k8s/base/karpenter/nodepool.yaml
+#
+# Requires (all created by Terraform):
+#   - karpenter.sh/discovery=petclinic-dev tag on the VPC subnets and the EKS node security group
+#   - instance profile petclinic-dev-karpenter-node-profile (terraform/modules/karpenter/)
+# If a tag is missing Karpenter finds no subnets/security groups and nodes are never launched;
+# if the instance profile name is wrong the node launches but its kubelet cannot join the cluster.
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: default
+spec:
+  template:
+    spec:
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["arm64"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          # on-demand only: the Graviton free trial is active, so Spot gives no saving.
+          # After it expires apply nodepool-spot-dev.yaml to add Spot.
+          values: ["on-demand"]
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: ["t4g.small", "t4g.medium"]
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+  # REQUIRED: without limits Karpenter has no upper bound and one big workload could
+  # trigger dozens of nodes (unbounded cost).
+  limits:
+    cpu: "8"
+    memory: 32Gi
+  disruption:
+    # Karpenter v1 name; "WhenUnderutilized" was the v1beta1 name and is rejected by v1
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 30s
+---
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: default
+spec:
+  # AL2023 AMI family (v1 selects the family through the AMI alias)
+  amiSelectorTerms:
+    - alias: al2023@latest
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: petclinic-dev
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: petclinic-dev
+  # Must match the Terraform karpenter module exactly: petclinic-{env}-karpenter-node-profile
+  instanceProfile: petclinic-dev-karpenter-node-profile
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 20Gi
+        volumeType: gp3
+        encrypted: true
