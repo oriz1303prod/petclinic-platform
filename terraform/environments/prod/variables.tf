@@ -26,3 +26,19 @@ variable "openai_api_key" {
   type        = string
   sensitive   = true
 }
+
+variable "monthly_budget_usd" {
+  description = "Monthly AWS Budget limit in USD; alerts fire at 50%, 80% and 100% of actual spend"
+  type        = number
+  default     = 10
+}
+
+variable "budget_alert_email" {
+  description = "Email address that receives AWS Budget alerts. Set in the git-ignored terraform.tfvars"
+  type        = string
+
+  validation {
+    condition     = can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", var.budget_alert_email))
+    error_message = "budget_alert_email must be a valid email address."
+  }
+}
